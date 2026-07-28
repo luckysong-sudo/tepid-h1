@@ -1,0 +1,67 @@
+{
+  "M0_data_tokenizer": {
+    "deliverables": [
+      "64K/80K/96K tokenizer comparison",
+      "license-classified data inventory",
+      "repository-level decontamination report"
+    ],
+    "exit_criteria": [
+      "tokenizer selected on zh/en/code compression and throughput",
+      "commercial-use rights recorded for every material source"
+    ]
+  },
+  "M1_350m_prototype": {
+    "deliverables": [
+      "reference and optimized Delta kernels",
+      "8K and 32K retrieval suite",
+      "Transformer compute-matched baseline"
+    ],
+    "exit_criteria": [
+      "no unexplained NaN/Inf on long sequences",
+      "chunkwise and recurrent outputs meet declared tolerance",
+      "quality is not worse than baseline by more than 2 percent"
+    ]
+  },
+  "M2_1_3b_ablation": {
+    "deliverables": [
+      "orthogonal Delta/NSA/MoE/MTP ablations",
+      "target-hardware prefill and decode benchmarks",
+      "Chinese and code exact-copy regression report"
+    ],
+    "exit_criteria": [
+      "each retained experimental module shows a net quality or efficiency benefit",
+      "end-to-end target-hardware speedup is positive"
+    ]
+  },
+  "M3_7b_product_evidence": {
+    "deliverables": [
+      "Dense teacher model",
+      "Instruct and Agent prototypes",
+      "hidden executable task evaluation"
+    ],
+    "exit_criteria": [
+      "product quality, latency, cost and safety targets are predeclared and met"
+    ]
+  },
+  "M4_moe_prototype": {
+    "deliverables": [
+      "expert-parallel training report",
+      "routing balance and communication report"
+    ],
+    "exit_criteria": [
+      "stable expert load CV at or below 0.25",
+      "MoE provides net benefit under production batch sizes"
+    ]
+  },
+  "M5_formal_training": {
+    "deliverables": [
+      "signed data, compute, budget and incident plans",
+      "Tepid-H1 Base checkpoint"
+    ],
+    "exit_criteria": [
+      "all prior gates passed",
+      "formal training separately approved"
+    ]
+  }
+}
+

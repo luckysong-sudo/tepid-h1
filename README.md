@@ -1,0 +1,55 @@
+# Tepid-H1
+
+Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**，不宣称具备正式
+28B 训练或生产推理能力。
+
+## 当前实现
+
+- 8 层宏块及 48 层参考配置生成器；
+- Gated Delta Memory 的逐 Token 正确性参考实现；
+- 局部 GQA 精确注意力；
+- 全局注意力的安全参考回退（当前不是生产级稀疏内核）；
+- Dense SwiGLU 与 Top-K Routed MoE 参考实现；
+- Tepid-H1 Backbone 与 Causal LM 装配；
+- 外置 Agent Runtime、Policy、Tool、Verifier 协议；
+- M0—M5 阶段门配置和标准库测试。
+
+## 明确限制
+
+`GatedDeltaMemoryReference` 使用 Python 时间循环，只用于公式、梯度和小模型验证。
+`GlobalSparseAttentionReference` 在短序列上回退为全因果注意力，尚未实现 NSA
+压缩/选择/滑窗三分支。MoE 也采用逐专家分发参考实现。以上模块在 350M 之前必须
+分别替换或接入经过数值对照的 Triton/CUDA 后端。
+
+## 快速检查
+
+无需 PyTorch：
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'
+PYTHONPATH=src python3 -m tepid_h1.cli plan --variant reference
+```
+
+安装 PyTorch 后运行模型测试：
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e '.[dev]'
+pytest
+```
+
+## 目录
+
+```text
+src/tepid_h1/
+  config.py             模型配置与宏块计划
+  modeling/             正确性参考模型
+  agent/                外置 Agent Runtime 协议与执行循环
+configs/
+  stage_gates.json      分阶段验收门
+docs/
+  ARCHITECTURE.md       实现边界与后端替换约定
+tests/                  配置、Runtime 与模型烟雾测试
+```
+
