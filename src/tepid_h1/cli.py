@@ -19,6 +19,13 @@ from .data import (
 )
 from .data.decontamination import file_sha256
 from .data.tokenizer_benchmark import corpus_digest
+from .evaluation import (
+    generate_retrieval_suite,
+    load_answer_key,
+    load_predictions,
+    score_retrieval,
+    write_retrieval_suite,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -62,6 +69,33 @@ def build_parser() -> argparse.ArgumentParser:
     training.add_argument("--seed", type=int, default=17)
     training.add_argument("--checkpoint", type=Path)
     training.add_argument("--resume", action="store_true")
+    retrieval_generate = subparsers.add_parser(
+        "retrieval-generate",
+        help="generate deterministic 8K/32K exact-retrieval cases",
+    )
+    retrieval_generate.add_argument("--prompts", type=Path, required=True)
+    retrieval_generate.add_argument("--answers", type=Path, required=True)
+    retrieval_generate.add_argument(
+        "--length",
+        type=int,
+        action="append",
+        dest="lengths",
+    )
+    retrieval_generate.add_argument(
+        "--position",
+        type=float,
+        action="append",
+        dest="positions",
+    )
+    retrieval_generate.add_argument("--seed", type=int, default=41)
+    retrieval_score = subparsers.add_parser(
+        "retrieval-score",
+        help="score exact retrieval predictions against a separate answer key",
+    )
+    retrieval_score.add_argument("--answers", type=Path, required=True)
+    retrieval_score.add_argument("--predictions", type=Path, required=True)
+    retrieval_score.add_argument("--minimum-accuracy", type=float, default=1.0)
+    retrieval_score.add_argument("--report", type=Path)
     return parser
 
 
@@ -224,6 +258,40 @@ def main() -> int:
             None,
         )
         return 0
+    if args.command == "retrieval-generate":
+        cases = generate_retrieval_suite(
+            lengths=tuple(args.lengths or (8192, 32768)),
+            positions=tuple(args.positions or (0.1, 0.5, 0.9)),
+            seed=args.seed,
+        )
+        write_retrieval_suite(
+            cases,
+            prompts_path=args.prompts,
+            answers_path=args.answers,
+        )
+        _write_payload(
+            {
+                "schema_version": 1,
+                "cases": len(cases),
+                "lengths": sorted({case.target_tokens for case in cases}),
+                "positions": sorted({case.insertion_fraction for case in cases}),
+                "prompts": str(args.prompts),
+                "answers": str(args.answers),
+            },
+            None,
+        )
+        return 0
+    if args.command == "retrieval-score":
+        payload = score_retrieval(
+            load_answer_key(args.answers),
+            load_predictions(args.predictions),
+            minimum_accuracy=args.minimum_accuracy,
+        )
+        payload["generated_at"] = datetime.now(timezone.utc).isoformat()
+        payload["answer_key_sha256"] = file_sha256(args.answers)
+        payload["predictions_sha256"] = file_sha256(args.predictions)
+        _write_payload(payload, args.report)
+        return 0 if payload["passed"] else 4
     raise AssertionError(f"unsupported command: {args.command}")
 
 

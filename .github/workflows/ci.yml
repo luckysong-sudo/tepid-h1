@@ -28,3 +28,11 @@ jobs:
           --benchmark configs/decontamination_benchmark.example.jsonl
       - run: tepid-h1 train-smoke --steps 1 --checkpoint /tmp/tepid-h1-smoke.pt
       - run: tepid-h1 train-smoke --steps 1 --checkpoint /tmp/tepid-h1-smoke.pt --resume
+      - run: >-
+          tepid-h1 retrieval-generate
+          --prompts /tmp/retrieval-prompts.jsonl
+          --answers /tmp/retrieval-answers.jsonl
+      - run: >-
+          tepid-h1 retrieval-score
+          --answers /tmp/retrieval-answers.jsonl
+          --predictions /tmp/retrieval-answers.jsonl
