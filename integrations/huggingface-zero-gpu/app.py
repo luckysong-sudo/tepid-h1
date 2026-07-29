@@ -11,7 +11,7 @@ import spaces
 from tepid_h1.integrations import ZeroGPUJobConfig, run_zero_gpu_job
 
 ROOT = Path(__file__).resolve().parent
-CORE_REVISION = "dc393cb13e2f477ff557625ba16674151928ae57"
+CORE_REVISION = "336b0d493d4d006fb51e3edf63408ab0d20eb796"
 
 
 @spaces.GPU(duration=60)
