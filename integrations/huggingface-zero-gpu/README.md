@@ -33,3 +33,15 @@ not establish language quality, 350M readiness or production-hardware performanc
 ZeroGPU currently does not support runtime `torch.compile`, so this Space intentionally
 runs the paired CUDA experiment only. Delta Inductor qualification must run on a
 conventional CUDA host or be migrated to an ahead-of-time compiled artifact.
+
+## Remote quality gate
+
+The `/run_remote_quality_gate` endpoint clones the immutable `CORE_REVISION` into
+allocation-local temporary storage, creates an isolated environment, and runs Ruff, the
+complete unit-test suite, data governance checks, training/checkpoint checks, retrieval
+checks, the baseline report, Delta validation and a governed BF16 CUDA smoke. It persists
+a bounded JSON report under `/data/reports`.
+
+Project hosts only edit and synchronize source code. They do not execute the test suite.
+GitHub Actions records this remote-only policy without duplicating compute on a hosted
+runner.

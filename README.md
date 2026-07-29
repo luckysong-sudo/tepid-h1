@@ -49,8 +49,9 @@ pip install -e '.[dev]'
 pytest
 ```
 
-持续集成会在每次推送和 Pull Request 上安装 CPU 参考环境，执行 Ruff 与完整的
-51 项配置、数据治理、训练、检索、后端资格、部署适配与分块一致性测试。
+完整质量门在 Hugging Face ZeroGPU Space 内执行，包括 Ruff、51 项配置、数据治理、
+训练、检索、后端资格、部署适配与分块一致性测试，并将报告持久化到绑定的 Bucket。
+项目宿主机只编辑与同步代码，不执行测试。GitHub Actions 仅记录远端测试策略。
 
 M0 数据资产审计：
 
