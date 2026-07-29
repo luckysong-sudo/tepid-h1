@@ -1,4 +1,4 @@
 torch>=2.8,<2.12
 gradio>=4,<7
 ruff>=0.9,<1
-tepid-h1 @ git+https://github.com/luckysong-sudo/tepid-h1.git@8cf9dba8764db5b96fa9ab3d7e64dd0927c5294e
+tepid-h1 @ git+https://github.com/luckysong-sudo/tepid-h1.git@a383613c9d71d10fb0d4407a5d1e0dc1ec462034

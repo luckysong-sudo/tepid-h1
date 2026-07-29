@@ -16,7 +16,7 @@ import torch
 from tepid_h1.integrations import ZeroGPUJobConfig, run_zero_gpu_job
 
 ROOT = Path(__file__).resolve().parent
-CORE_REVISION = "8cf9dba8764db5b96fa9ab3d7e64dd0927c5294e"
+CORE_REVISION = "a383613c9d71d10fb0d4407a5d1e0dc1ec462034"
 CORE_REPOSITORY = "https://github.com/luckysong-sudo/tepid-h1.git"
 DASHBOARD_REVISION = "c62c5a17543451d7bd81ce302c74a14949da4e2b"
 DASHBOARD_REPOSITORY = "https://github.com/luckysong-sudo/tepid-h1-progress.git"
