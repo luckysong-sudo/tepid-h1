@@ -22,6 +22,11 @@ DEV_MODE_API = f"https://huggingface.co/api/spaces/{SPACE_ID}/dev-mode"
 SPACE_INFO_API = f"https://huggingface.co/api/spaces/{SPACE_ID}"
 REMOTE_GATE_API = "/run_remote_quality_gate"
 PERFORMANCE_API = "/run_gpu_experiment"
+RECOVERABLE_RUNTIME_ERROR_MARKERS = (
+    "failed to create containerd task",
+    "oci runtime create failed",
+    "error running prestart hook",
+)
 
 
 def required_environment(name: str) -> str:
@@ -82,8 +87,16 @@ def set_dev_mode(session: requests.Session, enabled: bool) -> None:
     response.raise_for_status()
 
 
+def recoverable_runtime_error(runtime: dict[str, Any]) -> bool:
+    if runtime.get("stage") != "RUNTIME_ERROR":
+        return False
+    message = str(runtime.get("errorMessage") or "").lower()
+    return any(marker in message for marker in RECOVERABLE_RUNTIME_ERROR_MARKERS)
+
+
 def wait_for_runtime(
     session: requests.Session,
+    api: HfApi,
     *,
     source_revision: str,
     dev_mode: bool,
@@ -91,6 +104,7 @@ def wait_for_runtime(
 ) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
     last_state: dict[str, Any] = {}
+    restart_attempts = 0
     while time.monotonic() < deadline:
         info = space_info(session)
         runtime = info.get("runtime") or {}
@@ -99,6 +113,7 @@ def wait_for_runtime(
             "runtime_revision": runtime.get("sha"),
             "stage": runtime.get("stage"),
             "dev_mode": runtime.get("devMode"),
+            "error_message": runtime.get("errorMessage"),
         }
         if (
             info.get("sha") == source_revision
@@ -107,17 +122,41 @@ def wait_for_runtime(
             and runtime.get("devMode") is dev_mode
         ):
             return last_state
+        if recoverable_runtime_error(runtime):
+            if restart_attempts >= 2:
+                raise RuntimeError(
+                    "Space infrastructure runtime error persisted after automatic recovery: "
+                    f"{last_state}"
+                )
+            factory_reboot = restart_attempts == 1
+            restart_attempts += 1
+            print(
+                "Recovering Space infrastructure runtime error "
+                f"(attempt {restart_attempts}/2, factory_reboot={factory_reboot}): "
+                f"{runtime.get('errorMessage')}",
+                flush=True,
+            )
+            api.restart_space(repo_id=SPACE_ID, factory_reboot=factory_reboot)
+            time.sleep(15)
+            continue
+        if runtime.get("stage") in {"BUILD_ERROR", "RUNTIME_ERROR"}:
+            raise RuntimeError(f"Space entered a non-recoverable terminal state: {last_state}")
         time.sleep(10)
     raise TimeoutError(f"Space runtime did not converge: {last_state}")
 
 
-def refresh_dev_mode(session: requests.Session, source_revision: str) -> dict[str, Any]:
+def refresh_dev_mode(
+    session: requests.Session,
+    api: HfApi,
+    source_revision: str,
+) -> dict[str, Any]:
     disabled = False
     try:
         set_dev_mode(session, False)
         disabled = True
         wait_for_runtime(
             session,
+            api,
             source_revision=source_revision,
             dev_mode=False,
             timeout_seconds=900,
@@ -126,6 +165,7 @@ def refresh_dev_mode(session: requests.Session, source_revision: str) -> dict[st
         disabled = False
         return wait_for_runtime(
             session,
+            api,
             source_revision=source_revision,
             dev_mode=True,
             timeout_seconds=600,
@@ -251,7 +291,8 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="tepid-h1-space-") as temporary_directory:
         bundle = Path(temporary_directory) / "bundle"
         prepare_bundle(bundle, core_revision, dashboard_revision)
-        commit = HfApi(token=hf_token).upload_folder(
+        hf_api = HfApi(token=hf_token)
+        commit = hf_api.upload_folder(
             repo_id=SPACE_ID,
             repo_type="space",
             folder_path=bundle,
@@ -263,7 +304,7 @@ def main() -> None:
 
     hf_session = requests.Session()
     hf_session.headers.update({"Authorization": f"Bearer {hf_token}"})
-    runtime = refresh_dev_mode(hf_session, space_revision)
+    runtime = refresh_dev_mode(hf_session, hf_api, space_revision)
     client = wait_for_quality_api(hf_token)
     report = run_quality_gate(client, report_path)
     performance_report = (
