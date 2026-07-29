@@ -50,7 +50,7 @@ pip install -e '.[dev]'
 pytest
 ```
 
-完整质量门在 Hugging Face ZeroGPU Space 内执行，包括 Ruff、53 项配置、数据治理、
+完整质量门在 Hugging Face ZeroGPU Space 内执行，包括 Ruff、54 项配置、数据治理、
 训练、检索、后端资格、部署适配与分块一致性测试，并将报告持久化到绑定的 Bucket。
 项目宿主机只编辑与同步代码，不执行测试。GitHub Actions 自动部署 Space、刷新并恢复
 Dev Mode、校验运行提交、触发 ZeroGPU 质量门，并保存远端报告，不在 GitHub Runner

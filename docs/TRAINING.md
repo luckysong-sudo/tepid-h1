@@ -9,11 +9,14 @@ distributed trainer and must not be used to claim 350M or larger-scale readiness
 - Every step rejects NaN/Inf loss or gradient norm before the optimizer update.
 - Gradient clipping is applied before `optimizer.step()`.
 - Checkpoints are written through a temporary sibling and atomically replaced.
-- A checkpoint binds model weights, optimizer state and RNG state to the exact model config.
+- A checkpoint binds model weights, optimizer state, warmup/cosine scheduler state and RNG
+  state to the exact model config.
 - Governed training binds the checkpoint to the corpus digest, inventory digest, source,
-  batch shape, sequence length, learning rate and seed.
+  batch shape, sequence length, complete AdamW recipe, gradient clipping, scheduler horizon
+  and seed.
 - Governed resume advances the corpus from the global checkpoint step and fails closed if
-  either the data lineage or training contract changes.
+  either the data lineage or training contract changes, or if the scheduler step diverges
+  from the checkpoint step.
 - Metadata is restricted to JSON-compatible values so restricted loading remains portable.
 - Loading uses PyTorch's restricted `weights_only=True` mode. Only trusted local checkpoints
   should be opened.
@@ -37,6 +40,8 @@ the corpus digest matches its source record:
 ```bash
 tepid-h1 train-smoke \
   --steps 1 \
+  --total-steps 10 \
+  --warmup-steps 2 \
   --corpus configs/paired_corpus.example.jsonl \
   --inventory configs/data_inventory.example.json \
   --checkpoint /tmp/tepid-h1-governed.pt \
@@ -44,6 +49,8 @@ tepid-h1 train-smoke \
 
 tepid-h1 train-smoke \
   --steps 1 \
+  --total-steps 10 \
+  --warmup-steps 2 \
   --corpus configs/paired_corpus.example.jsonl \
   --inventory configs/data_inventory.example.json \
   --checkpoint /tmp/tepid-h1-governed.pt \
@@ -53,8 +60,9 @@ tepid-h1 train-smoke \
 
 The first command consumes corpus step 0; the resumed command starts from corpus step 1.
 The report records both file digests, the inventory/source identifiers, the exact selected
-batch digest and the half-open global step interval. Changing the corpus, inventory or bound
-training recipe causes resume to stop before another optimizer update.
+batch digest, per-step learning rate, scheduler state and the half-open global step interval.
+Changing the corpus, inventory or bound training recipe causes resume to stop before another
+optimizer update. A requested run cannot cross the declared scheduler horizon.
 
 ## ZeroGPU evidence
 

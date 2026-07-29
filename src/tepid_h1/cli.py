@@ -66,6 +66,14 @@ def build_parser() -> argparse.ArgumentParser:
     training.add_argument("--batch-size", type=int, default=1)
     training.add_argument("--sequence-length", type=int, default=8)
     training.add_argument("--learning-rate", type=float, default=1e-3)
+    training.add_argument("--weight-decay", type=float, default=0.1)
+    training.add_argument("--adam-beta1", type=float, default=0.9)
+    training.add_argument("--adam-beta2", type=float, default=0.95)
+    training.add_argument("--adam-epsilon", type=float, default=1e-8)
+    training.add_argument("--max-gradient-norm", type=float, default=1.0)
+    training.add_argument("--warmup-steps", type=int, default=2)
+    training.add_argument("--total-steps", type=int, default=10)
+    training.add_argument("--min-lr-ratio", type=float, default=0.1)
     training.add_argument("--seed", type=int, default=17)
     training.add_argument("--checkpoint", type=Path)
     training.add_argument("--resume", action="store_true")
@@ -256,6 +264,14 @@ def main() -> int:
             raise ValueError("sequence-length must be between 2 and 64")
         if args.learning_rate <= 0:
             raise ValueError("learning-rate must be positive")
+        if args.weight_decay < 0:
+            raise ValueError("weight-decay must be non-negative")
+        if not 0 <= args.adam_beta1 < 1 or not 0 <= args.adam_beta2 < 1:
+            raise ValueError("Adam betas must be in [0, 1)")
+        if args.adam_epsilon <= 0:
+            raise ValueError("adam-epsilon must be positive")
+        if args.max_gradient_norm <= 0:
+            raise ValueError("max-gradient-norm must be positive")
         if args.resume and args.checkpoint is None:
             raise ValueError("--resume requires --checkpoint")
         if (args.corpus is None) != (args.inventory is None):
@@ -266,6 +282,7 @@ def main() -> int:
         from .experiments import PairedExperimentConfig, load_governed_corpus
         from .modeling import TepidH1CausalLM
         from .training import (
+            WarmupCosineScheduler,
             causal_lm_train_step,
             load_checkpoint,
             save_checkpoint,
@@ -275,7 +292,19 @@ def main() -> int:
         torch.manual_seed(args.seed)
         config = TepidH1Config.smoke()
         model = TepidH1CausalLM(config)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=args.learning_rate,
+            betas=(args.adam_beta1, args.adam_beta2),
+            eps=args.adam_epsilon,
+            weight_decay=args.weight_decay,
+        )
+        scheduler = WarmupCosineScheduler(
+            optimizer,
+            warmup_steps=args.warmup_steps,
+            total_steps=args.total_steps,
+            min_lr_ratio=args.min_lr_ratio,
+        )
         starting_step = 0
         checkpoint_state = None
         if args.resume:
@@ -285,8 +314,11 @@ def main() -> int:
                 args.checkpoint,
                 model=model,
                 optimizer=optimizer,
+                scheduler=scheduler,
             )
             starting_step = checkpoint_state.step
+        if starting_step + args.steps > args.total_steps:
+            raise ValueError("requested steps exceed the training schedule")
 
         governed_corpus = (
             load_governed_corpus(
@@ -320,8 +352,21 @@ def main() -> int:
             "schema_version": 1,
             "batch_size": args.batch_size,
             "sequence_length": args.sequence_length,
-            "learning_rate": args.learning_rate,
             "seed": args.seed,
+            "optimizer": {
+                "name": "AdamW",
+                "learning_rate": args.learning_rate,
+                "weight_decay": args.weight_decay,
+                "betas": [args.adam_beta1, args.adam_beta2],
+                "epsilon": args.adam_epsilon,
+                "max_gradient_norm": args.max_gradient_norm,
+            },
+            "scheduler": {
+                "name": "warmup_cosine",
+                "warmup_steps": args.warmup_steps,
+                "total_steps": args.total_steps,
+                "min_lr_ratio": args.min_lr_ratio,
+            },
             "data": data_contract,
         }
         if checkpoint_state is not None:
@@ -338,13 +383,24 @@ def main() -> int:
                     (args.batch_size, args.sequence_length),
                 )
             )
-            metrics.append(asdict(causal_lm_train_step(model, input_ids, optimizer)))
+            metrics.append(
+                asdict(
+                    causal_lm_train_step(
+                        model,
+                        input_ids,
+                        optimizer,
+                        max_gradient_norm=args.max_gradient_norm,
+                    )
+                )
+            )
+            scheduler.step()
         final_step = starting_step + args.steps
         if args.checkpoint is not None:
             save_checkpoint(
                 args.checkpoint,
                 model=model,
                 optimizer=optimizer,
+                scheduler=scheduler,
                 step=final_step,
                 metadata={
                     "command": "train-smoke",
@@ -370,6 +426,7 @@ def main() -> int:
                 "starting_step": starting_step,
                 "final_step": final_step,
                 "metrics": metrics,
+                "scheduler_state": scheduler.state_dict(),
                 "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             },
             args.report,

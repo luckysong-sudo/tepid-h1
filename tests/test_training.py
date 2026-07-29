@@ -142,6 +142,94 @@ class TrainingTests(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, "does not contain"):
             validate_resume_contract({}, contract)
 
+    def test_scheduler_resume_matches_uninterrupted_training(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import (
+            WarmupCosineScheduler,
+            causal_lm_train_step,
+            load_checkpoint,
+            save_checkpoint,
+        )
+
+        config = TepidH1Config.smoke()
+        generator = torch.Generator(device="cpu")
+        generator.manual_seed(67)
+        batches = tuple(
+            torch.randint(0, config.vocab_size, (1, 6), generator=generator)
+            for _ in range(4)
+        )
+
+        def build_training_state():
+            torch.manual_seed(61)
+            model = TepidH1CausalLM(config)
+            optimizer = torch.optim.AdamW(
+                model.parameters(),
+                lr=1e-3,
+                betas=(0.9, 0.95),
+                weight_decay=0.1,
+            )
+            scheduler = WarmupCosineScheduler(
+                optimizer,
+                warmup_steps=2,
+                total_steps=4,
+                min_lr_ratio=0.1,
+            )
+            return model, optimizer, scheduler
+
+        uninterrupted, full_optimizer, full_scheduler = build_training_state()
+        full_lrs = []
+        for batch in batches:
+            full_lrs.append(
+                causal_lm_train_step(uninterrupted, batch, full_optimizer).learning_rate
+            )
+            full_scheduler.step()
+
+        split, split_optimizer, split_scheduler = build_training_state()
+        split_lrs = []
+        for batch in batches[:2]:
+            split_lrs.append(
+                causal_lm_train_step(split, batch, split_optimizer).learning_rate
+            )
+            split_scheduler.step()
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "scheduled.pt"
+            save_checkpoint(
+                checkpoint,
+                model=split,
+                optimizer=split_optimizer,
+                scheduler=split_scheduler,
+                step=2,
+            )
+            resumed, resumed_optimizer, resumed_scheduler = build_training_state()
+            state = load_checkpoint(
+                checkpoint,
+                model=resumed,
+                optimizer=resumed_optimizer,
+                scheduler=resumed_scheduler,
+            )
+            for batch in batches[2:]:
+                split_lrs.append(
+                    causal_lm_train_step(
+                        resumed,
+                        batch,
+                        resumed_optimizer,
+                    ).learning_rate
+                )
+                resumed_scheduler.step()
+
+        self.assertEqual(state.step, 2)
+        self.assertEqual(full_lrs, [0.0005, 0.001, 0.001, 0.0001])
+        self.assertEqual(split_lrs, full_lrs)
+        self.assertEqual(resumed_scheduler.state_dict(), full_scheduler.state_dict())
+        for expected, actual in zip(
+            uninterrupted.parameters(),
+            resumed.parameters(),
+            strict=True,
+        ):
+            torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
 
 if __name__ == "__main__":
     unittest.main()
