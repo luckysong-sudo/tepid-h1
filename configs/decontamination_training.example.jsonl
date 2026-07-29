@@ -1,0 +1,3 @@
+{"id":"train-zh-1","text":"端侧智能体需要稳定的状态管理和工具调用能力。"}
+{"id":"train-en-1","text":"Efficient recurrent models preserve bounded state during decoding."}
+{"id":"train-code-1","text":"def bounded_cache(window): return max(window - 1, 0)"}

@@ -10,10 +10,13 @@ from .config import TepidH1Config
 from .data import (
     audit_inventory,
     benchmark_candidate,
+    compare_corpora,
     load_corpus,
     load_inventory,
+    load_text_records,
     select_candidate,
 )
+from .data.decontamination import file_sha256
 from .data.tokenizer_benchmark import corpus_digest
 
 
@@ -25,6 +28,15 @@ def build_parser() -> argparse.ArgumentParser:
     audit = subparsers.add_parser("data-audit", help="audit an M0 data inventory")
     audit.add_argument("inventory", type=Path)
     audit.add_argument("--report", type=Path)
+    decontamination = subparsers.add_parser(
+        "decontaminate",
+        help="compare training JSONL against a held-out benchmark JSONL",
+    )
+    decontamination.add_argument("--training", type=Path, required=True)
+    decontamination.add_argument("--benchmark", type=Path, required=True)
+    decontamination.add_argument("--ngram-size", type=int, default=5)
+    decontamination.add_argument("--threshold", type=float, default=0.8)
+    decontamination.add_argument("--report", type=Path)
     tokenizer = subparsers.add_parser(
         "tokenizer-benchmark",
         help="compare 64K, 80K and 96K tokenizers on a zh/en/code JSONL corpus",
@@ -97,6 +109,22 @@ def main() -> int:
         report = audit_inventory(load_inventory(args.inventory))
         _write_payload(report.to_dict(), args.report)
         return 0 if report.passed else 2
+    if args.command == "decontaminate":
+        report = compare_corpora(
+            load_text_records(args.training),
+            load_text_records(args.benchmark),
+            ngram_size=args.ngram_size,
+            similarity_threshold=args.threshold,
+        )
+        payload = {
+            "schema_version": 1,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "training_file_sha256": file_sha256(args.training),
+            "benchmark_file_sha256": file_sha256(args.benchmark),
+            **report.to_dict(),
+        }
+        _write_payload(payload, args.report)
+        return 0 if report.clean else 3
     if args.command == "tokenizer-benchmark":
         samples = load_corpus(args.corpus)
         candidates: list[dict[str, Any]] = []

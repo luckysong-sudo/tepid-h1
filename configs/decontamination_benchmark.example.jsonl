@@ -1,0 +1,3 @@
+{"id":"heldout-zh-1","text":"数据库事务通过原子性和隔离性保护数据一致性。"}
+{"id":"heldout-en-1","text":"Ocean currents transport heat across large geographic distances."}
+{"id":"heldout-code-1","text":"def checksum(payload): return sha256(payload).hexdigest()"}

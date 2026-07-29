@@ -22,3 +22,7 @@ jobs:
       - run: ruff check src tests
       - run: python -m unittest discover -s tests -p "test_*.py" -v
       - run: tepid-h1 data-audit configs/data_inventory.example.json
+      - run: >-
+          tepid-h1 decontaminate
+          --training configs/decontamination_training.example.jsonl
+          --benchmark configs/decontamination_benchmark.example.jsonl

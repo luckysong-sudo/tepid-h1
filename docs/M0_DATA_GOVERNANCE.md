@@ -33,6 +33,23 @@ record must name the comparison method, held-out benchmark sets, completion time
 report location. The synthetic example compares exact hashes only; real inventories must
 add normalized exact matching plus documented near-duplicate detection thresholds.
 
+The repository provides a fail-closed comparison command:
+
+```bash
+tepid-h1 decontaminate \
+  --training /path/to/training.jsonl \
+  --benchmark /path/to/heldout.jsonl \
+  --ngram-size 5 \
+  --threshold 0.8 \
+  --report artifacts/decontamination.json
+```
+
+Both inputs use `{"id":"stable-id","text":"..."}` JSONL records. Text is normalized with
+Unicode NFKC, case folding and whitespace collapse. Exact normalized SHA-256 matches are
+reported first; remaining records use character n-gram Jaccard similarity with an inverted
+index for candidate generation. Reports contain IDs and hashes, not source text. Exit code
+`3` means contamination was detected.
+
 ## Tokenizer comparison
 
 Tokenizer selection requires one 64K, one 80K and one 96K tokenizer JSON plus a JSONL corpus
