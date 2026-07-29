@@ -139,7 +139,7 @@ class TrainingTests(unittest.TestCase):
         changed = {**contract, "sequence_length": 16}
         with self.assertRaisesRegex(ValueError, "does not match"):
             validate_resume_contract({"training_contract": contract}, changed)
-        with self.assertRaisesRegex(ValueError, "does not contain"):
+        with self.assertRaisesRegex(TypeError, "does not contain"):
             validate_resume_contract({}, contract)
 
 
