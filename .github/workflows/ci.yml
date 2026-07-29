@@ -36,3 +36,4 @@ jobs:
           tepid-h1 retrieval-score
           --answers /tmp/retrieval-answers.jsonl
           --predictions /tmp/retrieval-answers.jsonl
+      - run: tepid-h1 baseline-report --variant reference

@@ -96,6 +96,15 @@ def build_parser() -> argparse.ArgumentParser:
     retrieval_score.add_argument("--predictions", type=Path, required=True)
     retrieval_score.add_argument("--minimum-accuracy", type=float, default=1.0)
     retrieval_score.add_argument("--report", type=Path)
+    baseline = subparsers.add_parser(
+        "baseline-report",
+        help="report an active-parameter-matched Transformer baseline",
+    )
+    baseline.add_argument(
+        "--variant",
+        choices=("smoke", "prototype", "reference"),
+        default="prototype",
+    )
     return parser
 
 
@@ -292,6 +301,16 @@ def main() -> int:
         payload["predictions_sha256"] = file_sha256(args.predictions)
         _write_payload(payload, args.report)
         return 0 if payload["passed"] else 4
+    if args.command == "baseline-report":
+        from .modeling import comparison_report
+
+        variants = {
+            "smoke": TepidH1Config.smoke,
+            "prototype": TepidH1Config.prototype,
+            "reference": TepidH1Config.reference_28b_a7b,
+        }
+        _write_payload(comparison_report(variants[args.variant]()), None)
+        return 0
     raise AssertionError(f"unsupported command: {args.command}")
 
 

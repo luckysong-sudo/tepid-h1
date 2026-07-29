@@ -19,6 +19,18 @@ from .layers import (
 )
 
 
+def _causal_lm_loss(logits: Tensor, input_ids: Tensor, labels: Tensor, vocab_size: int) -> Tensor:
+    if labels.shape != input_ids.shape:
+        raise ValueError("labels must have the same shape as input_ids")
+    if labels.shape[1] < 2:
+        raise ValueError("causal language-model loss requires at least two tokens")
+    return F.cross_entropy(
+        logits[:, :-1].contiguous().float().view(-1, vocab_size),
+        labels[:, 1:].contiguous().view(-1),
+        ignore_index=-100,
+    )
+
+
 class TepidH1Block(nn.Module):
     def __init__(
         self, config: TepidH1Config, sequence: SequenceMixer, channel: ChannelMixer
@@ -158,13 +170,10 @@ class TepidH1CausalLM(nn.Module):
         )
         output.logits = self.lm_head(output.last_hidden_state)
         if labels is not None:
-            if labels.shape != input_ids.shape:
-                raise ValueError("labels must have the same shape as input_ids")
-            if labels.shape[1] < 2:
-                raise ValueError("causal language-model loss requires at least two tokens")
-            output.loss = F.cross_entropy(
-                output.logits[:, :-1].contiguous().float().view(-1, self.config.vocab_size),
-                labels[:, 1:].contiguous().view(-1),
-                ignore_index=-100,
+            output.loss = _causal_lm_loss(
+                output.logits,
+                input_ids,
+                labels,
+                self.config.vocab_size,
             )
         return output

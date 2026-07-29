@@ -11,7 +11,9 @@ from typing import Any
 import torch
 from torch import Tensor, nn
 
-from .modeling import TepidH1CausalLM
+from .modeling import TepidH1CausalLM, TransformerBaselineCausalLM
+
+TrainableCausalLM = TepidH1CausalLM | TransformerBaselineCausalLM
 
 
 class NonFiniteTrainingError(RuntimeError):
@@ -32,7 +34,7 @@ class CheckpointState:
 
 
 def causal_lm_train_step(
-    model: TepidH1CausalLM,
+    model: TrainableCausalLM,
     input_ids: Tensor,
     optimizer: torch.optim.Optimizer,
     *,
@@ -67,7 +69,7 @@ def causal_lm_train_step(
 def save_checkpoint(
     path: str | Path,
     *,
-    model: TepidH1CausalLM,
+    model: TrainableCausalLM,
     optimizer: torch.optim.Optimizer,
     step: int,
     metadata: Mapping[str, Any] | None = None,
@@ -90,7 +92,7 @@ def save_checkpoint(
     temporary = Path(temporary_name)
     payload = {
         "schema_version": 1,
-        "config": model.config.to_dict(),
+        "config": _serialized_model_config(model),
         "model_state": model.state_dict(),
         "optimizer_state": optimizer.state_dict(),
         "rng_state": torch.get_rng_state(),
@@ -108,14 +110,14 @@ def save_checkpoint(
 def load_checkpoint(
     path: str | Path,
     *,
-    model: TepidH1CausalLM,
+    model: TrainableCausalLM,
     optimizer: torch.optim.Optimizer | None = None,
     map_location: str | torch.device = "cpu",
 ) -> CheckpointState:
     payload = torch.load(path, map_location=map_location, weights_only=True)
     if not isinstance(payload, dict) or payload.get("schema_version") != 1:
         raise ValueError("unsupported checkpoint schema")
-    if payload.get("config") != model.config.to_dict():
+    if payload.get("config") != _serialized_model_config(model):
         raise ValueError("checkpoint model config does not match the target model")
     step = payload.get("step")
     if not isinstance(step, int) or isinstance(step, bool) or step < 0:
@@ -141,3 +143,9 @@ def load_checkpoint(
     if torch.cuda.is_available() and cuda_rng_states:
         torch.cuda.set_rng_state_all(cuda_rng_states)
     return CheckpointState(step=step, metadata=metadata)
+
+
+def _serialized_model_config(model: TrainableCausalLM) -> dict[str, Any]:
+    if isinstance(model, TransformerBaselineCausalLM):
+        return model.baseline_config.to_dict()
+    return model.config.to_dict()
