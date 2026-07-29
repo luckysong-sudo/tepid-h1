@@ -38,6 +38,13 @@ jobs:
           --predictions /tmp/retrieval-answers.jsonl
       - run: tepid-h1 baseline-report --variant reference
       - run: >-
+          tepid-h1 delta-validate
+          --backend eager
+          --device cpu
+          --dtype float32
+          --iterations 1
+          --report /tmp/delta-compiler-boundary.json
+      - run: >-
           tepid-h1 compare-smoke
           --steps 1
           --trials 2

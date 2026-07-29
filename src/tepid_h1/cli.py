@@ -105,6 +105,23 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("smoke", "prototype", "reference"),
         default="prototype",
     )
+    delta_validation = subparsers.add_parser(
+        "delta-validate",
+        help="qualify a compiled Delta backend against the correctness reference",
+    )
+    delta_validation.add_argument("--backend", choices=("eager", "inductor"), default="eager")
+    delta_validation.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    delta_validation.add_argument(
+        "--dtype",
+        choices=("float32", "bfloat16", "float16"),
+        default="float32",
+    )
+    delta_validation.add_argument("--batch-size", type=int, default=1)
+    delta_validation.add_argument("--sequence-length", type=int, default=4)
+    delta_validation.add_argument("--iterations", type=int, default=3)
+    delta_validation.add_argument("--seed", type=int, default=71)
+    delta_validation.add_argument("--target-device-label")
+    delta_validation.add_argument("--report", type=Path)
     comparison = subparsers.add_parser(
         "compare-smoke",
         help="train hybrid and matched baseline on identical governed or random-token batches",
@@ -331,6 +348,27 @@ def main() -> int:
         }
         _write_payload(comparison_report(variants[args.variant]()), None)
         return 0
+    if args.command == "delta-validate":
+        from .evaluation.delta_backend import (
+            DeltaBackendValidationConfig,
+            validate_delta_backend,
+        )
+
+        payload = validate_delta_backend(
+            DeltaBackendValidationConfig(
+                backend=args.backend,
+                device=args.device,
+                dtype=args.dtype,
+                batch_size=args.batch_size,
+                sequence_length=args.sequence_length,
+                iterations=args.iterations,
+                seed=args.seed,
+                target_device_label=args.target_device_label,
+            )
+        )
+        payload["generated_at"] = datetime.now(timezone.utc).isoformat()
+        _write_payload(payload, args.report)
+        return 0 if payload["numerical_passed"] else 5
     if args.command == "compare-smoke":
         from .experiments import (
             PairedExperimentConfig,

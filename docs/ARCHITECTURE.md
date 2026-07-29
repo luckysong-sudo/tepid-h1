@@ -22,6 +22,9 @@ An optimized backend may replace it only when:
 4. empty, short, ragged and maximum-shape cases pass;
 5. end-to-end throughput improves on the target topology.
 
+`tepid-h1 delta-validate` turns the first, second, third and fifth conditions into a
+machine-readable qualification report for Delta candidates. See `docs/DELTA_BACKEND.md`.
+
 ## Delta state convention
 
 The reference stores each head state as `[key_dim, value_dim]`. Decay acts on the key
