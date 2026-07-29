@@ -124,6 +124,32 @@ class PairedExperimentTests(unittest.TestCase):
                     vocab_size=128,
                 )
 
+    def test_governed_corpus_advances_from_resume_step(self):
+        from tepid_h1.experiments import PairedExperimentConfig, load_governed_corpus
+
+        with tempfile.TemporaryDirectory() as directory:
+            corpus_path, inventory_path = _write_governed_fixture(Path(directory))
+            config = PairedExperimentConfig(steps=1, sequence_length=5)
+            first = load_governed_corpus(
+                corpus_path,
+                inventory_path,
+                config,
+                vocab_size=128,
+            )
+            resumed = load_governed_corpus(
+                corpus_path,
+                inventory_path,
+                config,
+                vocab_size=128,
+                start_step=1,
+            )
+
+        self.assertEqual(first.start_step, 0)
+        self.assertEqual(resumed.start_step, 1)
+        self.assertNotEqual(first.batch_sha256, resumed.batch_sha256)
+        self.assertEqual(first.batches[0].tolist(), [[1, 2, 3, 4, 5]])
+        self.assertEqual(resumed.batches[0].tolist(), [[7, 8, 9, 10, 11]])
+
 
 def _write_governed_fixture(
     directory: Path,
@@ -134,6 +160,8 @@ def _write_governed_fixture(
     corpus_text = (
         '{"id":"sample-1","source_id":"test-source","domain":"en",'
         '"token_ids":[1,2,3,4,5,6]}\n'
+        '{"id":"sample-2","source_id":"test-source","domain":"code",'
+        '"token_ids":[7,8,9,10,11,12]}\n'
     )
     corpus_path.write_text(corpus_text, encoding="utf-8")
     actual_checksum = hashlib.sha256(corpus_text.encode()).hexdigest()
@@ -155,7 +183,7 @@ def _write_governed_fixture(
                 "rights_evidence": "test fixture",
                 "languages": ["en"],
                 "domains": ["synthetic"],
-                "estimated_tokens": 6,
+                "estimated_tokens": 12,
                 "pii_status": "absent",
                 "quality_status": "accepted",
             }

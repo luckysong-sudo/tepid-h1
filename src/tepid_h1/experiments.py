@@ -60,6 +60,8 @@ class PairedExperimentConfig:
 @dataclass(frozen=True)
 class GovernedCorpus:
     batches: tuple[Tensor, ...]
+    batch_sha256: str
+    start_step: int
     file_sha256: str
     inventory_file_sha256: str
     inventory_id: str
@@ -74,7 +76,10 @@ def load_governed_corpus(
     config: PairedExperimentConfig,
     *,
     vocab_size: int,
+    start_step: int = 0,
 ) -> GovernedCorpus:
+    if not isinstance(start_step, int) or isinstance(start_step, bool) or start_step < 0:
+        raise ValueError("start_step must be a non-negative integer")
     corpus_path = Path(corpus_path)
     inventory = load_inventory(inventory_path)
     audit = audit_inventory(inventory)
@@ -124,9 +129,11 @@ def load_governed_corpus(
             f"corpus SHA-256 does not match inventory source {source_id!r}: {checksum}"
         )
 
-    batches = _records_to_batches(records, config)
+    batches = _records_to_batches(records, config, start_step=start_step)
     return GovernedCorpus(
         batches=batches,
+        batch_sha256=_batch_digest(batches),
+        start_step=start_step,
         file_sha256=checksum,
         inventory_file_sha256=file_sha256(inventory_path),
         inventory_id=audit.inventory_id,
@@ -169,7 +176,9 @@ def run_paired_smoke(
     governed = corpus is not None
     data: dict[str, Any] = {
         "kind": "governed_fixed_token_corpus" if governed else "deterministic_random_tokens",
-        "batch_sha256": _batch_digest(batches),
+        "batch_sha256": (
+            corpus.batch_sha256 if corpus is not None else _batch_digest(batches)
+        ),
         "batches": len(batches),
         "tokens_per_model_per_trial": trained_tokens,
         "tokens_per_model_total": trained_tokens * config.trials,
@@ -281,9 +290,14 @@ def _validate_corpus_record(
 def _records_to_batches(
     records: list[dict[str, Any]],
     config: PairedExperimentConfig,
+    *,
+    start_step: int = 0,
 ) -> tuple[Tensor, ...]:
     required_records = config.steps * config.batch_size
-    selected = [records[index % len(records)] for index in range(required_records)]
+    start_record = start_step * config.batch_size
+    selected = [
+        records[(start_record + index) % len(records)] for index in range(required_records)
+    ]
     return tuple(
         torch.tensor(
             [

@@ -69,6 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
     training.add_argument("--seed", type=int, default=17)
     training.add_argument("--checkpoint", type=Path)
     training.add_argument("--resume", action="store_true")
+    training.add_argument("--corpus", type=Path)
+    training.add_argument("--inventory", type=Path)
+    training.add_argument("--report", type=Path)
     retrieval_generate = subparsers.add_parser(
         "retrieval-generate",
         help="generate deterministic 8K/32K exact-retrieval cases",
@@ -255,32 +258,85 @@ def main() -> int:
             raise ValueError("learning-rate must be positive")
         if args.resume and args.checkpoint is None:
             raise ValueError("--resume requires --checkpoint")
+        if (args.corpus is None) != (args.inventory is None):
+            raise ValueError("--corpus and --inventory must be provided together")
 
         import torch
 
+        from .experiments import PairedExperimentConfig, load_governed_corpus
         from .modeling import TepidH1CausalLM
-        from .training import causal_lm_train_step, load_checkpoint, save_checkpoint
+        from .training import (
+            causal_lm_train_step,
+            load_checkpoint,
+            save_checkpoint,
+            validate_resume_contract,
+        )
 
         torch.manual_seed(args.seed)
         config = TepidH1Config.smoke()
         model = TepidH1CausalLM(config)
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
         starting_step = 0
+        checkpoint_state = None
         if args.resume:
             if not args.checkpoint.exists():
                 raise FileNotFoundError(args.checkpoint)
-            starting_step = load_checkpoint(
+            checkpoint_state = load_checkpoint(
                 args.checkpoint,
                 model=model,
                 optimizer=optimizer,
-            ).step
+            )
+            starting_step = checkpoint_state.step
+
+        governed_corpus = (
+            load_governed_corpus(
+                args.corpus,
+                args.inventory,
+                PairedExperimentConfig(
+                    steps=args.steps,
+                    batch_size=args.batch_size,
+                    sequence_length=args.sequence_length,
+                    learning_rate=args.learning_rate,
+                    seed=args.seed,
+                ),
+                vocab_size=config.vocab_size,
+                start_step=starting_step,
+            )
+            if args.corpus is not None
+            else None
+        )
+        data_contract = (
+            {
+                "kind": "governed_fixed_token_corpus",
+                "corpus_file_sha256": governed_corpus.file_sha256,
+                "inventory_file_sha256": governed_corpus.inventory_file_sha256,
+                "inventory_id": governed_corpus.inventory_id,
+                "source_id": governed_corpus.source_id,
+            }
+            if governed_corpus is not None
+            else {"kind": "deterministic_random_tokens"}
+        )
+        training_contract = {
+            "schema_version": 1,
+            "batch_size": args.batch_size,
+            "sequence_length": args.sequence_length,
+            "learning_rate": args.learning_rate,
+            "seed": args.seed,
+            "data": data_contract,
+        }
+        if checkpoint_state is not None:
+            validate_resume_contract(checkpoint_state.metadata, training_contract)
 
         metrics = []
-        for _ in range(args.steps):
-            input_ids = torch.randint(
-                0,
-                config.vocab_size,
-                (args.batch_size, args.sequence_length),
+        for step_index in range(args.steps):
+            input_ids = (
+                governed_corpus.batches[step_index]
+                if governed_corpus is not None
+                else torch.randint(
+                    0,
+                    config.vocab_size,
+                    (args.batch_size, args.sequence_length),
+                )
             )
             metrics.append(asdict(causal_lm_train_step(model, input_ids, optimizer)))
         final_step = starting_step + args.steps
@@ -290,18 +346,33 @@ def main() -> int:
                 model=model,
                 optimizer=optimizer,
                 step=final_step,
-                metadata={"command": "train-smoke", "seed": args.seed},
+                metadata={
+                    "command": "train-smoke",
+                    "training_contract": training_contract,
+                },
             )
+        data_report = {
+            **data_contract,
+            "start_step": starting_step,
+            "end_step": final_step,
+            "batch_sha256": (
+                governed_corpus.batch_sha256 if governed_corpus is not None else None
+            ),
+            "records": governed_corpus.records if governed_corpus is not None else None,
+            "domains": list(governed_corpus.domains) if governed_corpus is not None else None,
+        }
         _write_payload(
             {
                 "schema_version": 1,
                 "config": config.to_dict(),
+                "training_contract": training_contract,
+                "data": data_report,
                 "starting_step": starting_step,
                 "final_step": final_step,
                 "metrics": metrics,
                 "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             },
-            None,
+            args.report,
         )
         return 0
     if args.command == "retrieval-generate":

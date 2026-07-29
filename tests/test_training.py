@@ -119,6 +119,29 @@ class TrainingTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not match"):
                 load_checkpoint(checkpoint, model=different)
 
+    def test_resume_contract_fails_closed_on_data_or_recipe_change(self):
+        from tepid_h1.training import validate_resume_contract
+
+        contract = {
+            "schema_version": 1,
+            "batch_size": 1,
+            "sequence_length": 8,
+            "learning_rate": 0.001,
+            "seed": 17,
+            "data": {
+                "kind": "governed_fixed_token_corpus",
+                "corpus_file_sha256": "a" * 64,
+                "inventory_file_sha256": "b" * 64,
+            },
+        }
+        validate_resume_contract({"training_contract": contract}, contract)
+
+        changed = {**contract, "sequence_length": 16}
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            validate_resume_contract({"training_contract": contract}, changed)
+        with self.assertRaisesRegex(ValueError, "does not contain"):
+            validate_resume_contract({}, contract)
+
 
 if __name__ == "__main__":
     unittest.main()

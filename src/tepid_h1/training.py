@@ -33,6 +33,17 @@ class CheckpointState:
     metadata: Mapping[str, Any]
 
 
+def validate_resume_contract(
+    checkpoint_metadata: Mapping[str, Any],
+    expected_contract: Mapping[str, Any],
+) -> None:
+    saved_contract = checkpoint_metadata.get("training_contract")
+    if not isinstance(saved_contract, Mapping):
+        raise ValueError("checkpoint does not contain a training contract")
+    if dict(saved_contract) != dict(expected_contract):
+        raise ValueError("checkpoint training contract does not match the current run")
+
+
 def causal_lm_train_step(
     model: TrainableCausalLM,
     input_ids: Tensor,

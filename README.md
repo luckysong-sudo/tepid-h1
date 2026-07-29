@@ -12,7 +12,8 @@ Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**�
 - Delta 与注意力 KV 状态续传，支持整模型分块一致性验证；
 - Dense SwiGLU 与 Top-K Routed MoE 参考实现；
 - Tepid-H1 Backbone 与 Causal LM 装配；
-- 自回归损失、有限值检查、梯度裁剪与可恢复 checkpoint 的最小训练闭环；
+- 自回归损失、有限值检查、梯度裁剪，以及绑定治理语料血缘和训练配方的可恢复
+  checkpoint 最小训练闭环；
 - 答案隔离、精确长度的 8K/32K 检索生成与分维度评分套件；
 - 全 GQA＋Dense SwiGLU 的激活参数匹配 Transformer 对照基线；
 - 绑定审计清单的固定小语料、重复试验与不确定性统计的混合/基线配对报告；
@@ -49,7 +50,7 @@ pip install -e '.[dev]'
 pytest
 ```
 
-完整质量门在 Hugging Face ZeroGPU Space 内执行，包括 Ruff、51 项配置、数据治理、
+完整质量门在 Hugging Face ZeroGPU Space 内执行，包括 Ruff、53 项配置、数据治理、
 训练、检索、后端资格、部署适配与分块一致性测试，并将报告持久化到绑定的 Bucket。
 项目宿主机只编辑与同步代码，不执行测试。GitHub Actions 自动部署 Space、刷新并恢复
 Dev Mode、校验运行提交、触发 ZeroGPU 质量门，并保存远端报告，不在 GitHub Runner
