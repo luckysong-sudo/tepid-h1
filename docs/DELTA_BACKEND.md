@@ -47,3 +47,16 @@ the same state-dict and recurrent-state layouts, uses batched matrix reads, and 
 erase and write into one algebraically equivalent rank-one update. It is a portable
 optimization and an intermediate target for future Triton or custom CUDA work, not a
 claim that the Python recurrence is already a production kernel.
+
+## 2026-07-29 CPU qualification signal
+
+Core revision `dc393cb13e2f477ff557625ba16674151928ae57` passed the forward,
+final-state, input-gradient, initial-state-gradient, parameter-gradient and chunked
+recurrence comparisons in FP32. On the smoke shape with batch size 1, sequence length 64
+and 30 alternating warmed iterations, the candidate processed 9,769.5 tokens/second
+versus 6,989.4 for the reference, a 1.398x candidate/reference speedup.
+
+This is a local CPU microbenchmark, not target-hardware qualification. The fused candidate
+is deployed to the public ZeroGPU Space for the governed CUDA paired rerun; only that
+end-to-end result can show whether the operator-level improvement materially changes the
+current tiny hybrid-model bottleneck.
