@@ -107,14 +107,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     comparison = subparsers.add_parser(
         "compare-smoke",
-        help="train hybrid and matched baseline on identical random-token batches",
+        help="train hybrid and matched baseline on identical governed or random-token batches",
     )
     comparison.add_argument("--steps", type=int, default=2)
+    comparison.add_argument("--trials", type=int, default=1)
     comparison.add_argument("--batch-size", type=int, default=1)
     comparison.add_argument("--sequence-length", type=int, default=8)
     comparison.add_argument("--learning-rate", type=float, default=1e-3)
     comparison.add_argument("--max-gradient-norm", type=float, default=1.0)
     comparison.add_argument("--seed", type=int, default=37)
+    comparison.add_argument("--corpus", type=Path)
+    comparison.add_argument("--inventory", type=Path)
     comparison.add_argument("--report", type=Path)
     return parser
 
@@ -323,18 +326,34 @@ def main() -> int:
         _write_payload(comparison_report(variants[args.variant]()), None)
         return 0
     if args.command == "compare-smoke":
-        from .experiments import PairedExperimentConfig, run_paired_smoke
-
-        payload = run_paired_smoke(
-            PairedExperimentConfig(
-                steps=args.steps,
-                batch_size=args.batch_size,
-                sequence_length=args.sequence_length,
-                learning_rate=args.learning_rate,
-                max_gradient_norm=args.max_gradient_norm,
-                seed=args.seed,
-            )
+        from .experiments import (
+            PairedExperimentConfig,
+            load_governed_corpus,
+            run_paired_smoke,
         )
+
+        if (args.corpus is None) != (args.inventory is None):
+            raise ValueError("--corpus and --inventory must be provided together")
+        experiment_config = PairedExperimentConfig(
+            steps=args.steps,
+            trials=args.trials,
+            batch_size=args.batch_size,
+            sequence_length=args.sequence_length,
+            learning_rate=args.learning_rate,
+            max_gradient_norm=args.max_gradient_norm,
+            seed=args.seed,
+        )
+        corpus = (
+            load_governed_corpus(
+                args.corpus,
+                args.inventory,
+                experiment_config,
+                vocab_size=TepidH1Config.smoke().vocab_size,
+            )
+            if args.corpus is not None
+            else None
+        )
+        payload = run_paired_smoke(experiment_config, corpus=corpus)
         payload["generated_at"] = datetime.now(timezone.utc).isoformat()
         _write_payload(payload, args.report)
         return 0

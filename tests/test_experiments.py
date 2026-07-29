@@ -1,4 +1,8 @@
+import hashlib
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 try:
     import torch
@@ -15,13 +19,14 @@ class PairedExperimentTests(unittest.TestCase):
             PairedExperimentConfig(steps=1, batch_size=1, sequence_length=6, seed=43)
         )
 
-        self.assertEqual(report["hybrid"]["trained_tokens"], 5)
-        self.assertEqual(report["baseline"]["trained_tokens"], 5)
-        self.assertEqual(report["data"]["tokens_per_model"], 5)
-        self.assertTrue(report["hybrid"]["parameter_estimate_matches_actual"])
-        self.assertTrue(report["baseline"]["parameter_estimate_matches_actual"])
-        self.assertGreater(report["hybrid"]["tokens_per_second"], 0)
-        self.assertGreater(report["baseline"]["tokens_per_second"], 0)
+        trial = report["trials"][0]
+        self.assertEqual(trial["hybrid"]["trained_tokens"], 5)
+        self.assertEqual(trial["baseline"]["trained_tokens"], 5)
+        self.assertEqual(report["data"]["tokens_per_model_per_trial"], 5)
+        self.assertTrue(report["parameters"]["hybrid"]["estimate_matches_actual"])
+        self.assertTrue(report["parameters"]["baseline"]["estimate_matches_actual"])
+        self.assertGreater(trial["hybrid"]["tokens_per_second"], 0)
+        self.assertGreater(trial["baseline"]["tokens_per_second"], 0)
 
     def test_same_seed_reproduces_data_and_loss(self):
         from tepid_h1.experiments import PairedExperimentConfig, run_paired_smoke
@@ -30,9 +35,15 @@ class PairedExperimentTests(unittest.TestCase):
         first = run_paired_smoke(config)
         second = run_paired_smoke(config)
 
-        self.assertEqual(first["data"]["sha256"], second["data"]["sha256"])
-        self.assertEqual(first["hybrid"]["initial_loss"], second["hybrid"]["initial_loss"])
-        self.assertEqual(first["baseline"]["initial_loss"], second["baseline"]["initial_loss"])
+        self.assertEqual(first["data"]["batch_sha256"], second["data"]["batch_sha256"])
+        self.assertEqual(
+            first["trials"][0]["hybrid"]["initial_loss"],
+            second["trials"][0]["hybrid"]["initial_loss"],
+        )
+        self.assertEqual(
+            first["trials"][0]["baseline"]["initial_loss"],
+            second["trials"][0]["baseline"]["initial_loss"],
+        )
 
     def test_invalid_experiment_config_is_rejected(self):
         from tepid_h1.experiments import PairedExperimentConfig
@@ -41,6 +52,108 @@ class PairedExperimentTests(unittest.TestCase):
             PairedExperimentConfig(steps=0)
         with self.assertRaisesRegex(ValueError, "sequence_length"):
             PairedExperimentConfig(sequence_length=1)
+        with self.assertRaisesRegex(ValueError, "trials"):
+            PairedExperimentConfig(trials=0)
+
+    def test_governed_corpus_binds_inventory_and_reports_uncertainty(self):
+        from tepid_h1.experiments import (
+            PairedExperimentConfig,
+            load_governed_corpus,
+            run_paired_smoke,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            corpus_path, inventory_path = _write_governed_fixture(Path(directory))
+            config = PairedExperimentConfig(
+                steps=1,
+                trials=2,
+                batch_size=1,
+                sequence_length=5,
+                seed=53,
+            )
+            corpus = load_governed_corpus(
+                corpus_path,
+                inventory_path,
+                config,
+                vocab_size=128,
+            )
+            report = run_paired_smoke(config, corpus=corpus)
+
+        self.assertEqual(report["experiment"], "paired_governed_corpus_smoke")
+        self.assertEqual(report["data"]["inventory_id"], "test-inventory")
+        self.assertEqual(report["data"]["source_id"], "test-source")
+        self.assertEqual(len(report["data"]["inventory_file_sha256"]), 64)
+        self.assertEqual(len(report["trials"]), 2)
+        self.assertEqual(report["aggregates"]["hybrid"]["loss_change"]["samples"], 2)
+        throughput_ratio = report["aggregates"]["paired"][
+            "baseline_over_hybrid_tokens_per_second"
+        ]
+        self.assertEqual(throughput_ratio["samples"], 2)
+        self.assertGreater(throughput_ratio["ci95_low"], 0)
+
+    def test_governed_corpus_rejects_checksum_mismatch(self):
+        from tepid_h1.experiments import PairedExperimentConfig, load_governed_corpus
+
+        with tempfile.TemporaryDirectory() as directory:
+            corpus_path, inventory_path = _write_governed_fixture(
+                Path(directory),
+                checksum="0" * 64,
+            )
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                load_governed_corpus(
+                    corpus_path,
+                    inventory_path,
+                    PairedExperimentConfig(steps=1, sequence_length=5),
+                    vocab_size=128,
+                )
+
+
+def _write_governed_fixture(
+    directory: Path,
+    *,
+    checksum: str | None = None,
+) -> tuple[Path, Path]:
+    corpus_path = directory / "corpus.jsonl"
+    corpus_text = (
+        '{"id":"sample-1","source_id":"test-source","domain":"en",'
+        '"token_ids":[1,2,3,4,5,6]}\n'
+    )
+    corpus_path.write_text(corpus_text, encoding="utf-8")
+    actual_checksum = hashlib.sha256(corpus_text.encode()).hexdigest()
+    inventory = {
+        "schema_version": 1,
+        "inventory_id": "test-inventory",
+        "owner": "tests",
+        "generated_at": "2026-07-29T00:00:00Z",
+        "sources": [
+            {
+                "id": "test-source",
+                "name": "Synthetic test source",
+                "uri": "repo://tests/corpus.jsonl",
+                "snapshot": "v1",
+                "sha256": checksum or actual_checksum,
+                "license_id": "CC0-1.0",
+                "license_category": "public_domain",
+                "commercial_use": True,
+                "rights_evidence": "test fixture",
+                "languages": ["en"],
+                "domains": ["synthetic"],
+                "estimated_tokens": 6,
+                "pii_status": "absent",
+                "quality_status": "accepted",
+            }
+        ],
+        "repository_decontamination": {
+            "status": "complete",
+            "method": "synthetic fixture isolation",
+            "benchmark_sets": ["synthetic-heldout"],
+            "report_uri": "test fixture",
+            "completed_at": "2026-07-29T00:00:00Z",
+        },
+    }
+    inventory_path = directory / "inventory.json"
+    inventory_path.write_text(json.dumps(inventory), encoding="utf-8")
+    return corpus_path, inventory_path
 
 
 if __name__ == "__main__":

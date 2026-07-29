@@ -6,17 +6,17 @@
   "sources": [
     {
       "id": "synthetic-fixture-v1",
-      "name": "Synthetic CI fixture",
-      "uri": "repo://tests/fixtures/synthetic",
+      "name": "Synthetic governed paired-experiment fixture",
+      "uri": "repo://configs/paired_corpus.example.jsonl",
       "snapshot": "v1",
-      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sha256": "882c60467be6da41b53ec15a650d25d5e3f612c2e32da332bb258bb36e76aa0b",
       "license_id": "CC0-1.0",
       "license_category": "public_domain",
       "commercial_use": true,
       "rights_evidence": "docs/M0_DATA_GOVERNANCE.md#synthetic-fixture",
       "languages": ["zh", "en"],
       "domains": ["synthetic", "code"],
-      "estimated_tokens": 1000,
+      "estimated_tokens": 72,
       "pii_status": "absent",
       "quality_status": "accepted"
     }
