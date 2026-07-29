@@ -36,9 +36,21 @@ full-attention oracle limited to short sequences and must never be used to claim
 speedups. The production contract will expose compressed blocks, recent blocks and
 query-selected blocks separately so their recall and cost can be measured.
 
+## Streaming state convention
+
+Every Delta layer returns one recurrent matrix state. Every attention layer returns one
+`AttentionState` containing projected KV tensors in `[batch, kv_head, token, head_dim]`
+orientation. `TepidH1Output` keeps these as separate ordered tuples so a caller can feed
+both back on the next chunk without coupling unlike state types.
+
+Local attention retains at most `local_window - 1` previous KV entries: this is sufficient
+for the first token of the next chunk and bounds decode memory. The global reference retains
+the complete KV history up to `global_reference_max_tokens`. A production sparse backend
+may use a different physical layout, but must preserve full-pass versus chunked output
+agreement at declared boundaries.
+
 ## Agent boundary
 
 The model emits only `ToolCall` or `FinalAnswer`. Credentials, permissions, execution,
 long-term memory and completion verification remain outside model weights. A final answer
 is returned only after the Verifier accepts it.
-

@@ -38,6 +38,14 @@ class MoERouterStats:
     router_probabilities: Tensor
 
 
+@dataclass(frozen=True)
+class AttentionState:
+    """Projected KV history for reference streaming attention."""
+
+    key: Tensor
+    value: Tensor
+
+
 class RoutedMoEReference(nn.Module):
     """Correctness-first Top-K MoE; replace with grouped GEMM before scale-up."""
 
@@ -165,34 +173,81 @@ class GQAAttentionReference(nn.Module):
         batch_size, sequence_length, _ = x.shape
         return x.view(batch_size, sequence_length, heads, self.head_dim).transpose(1, 2)
 
-    def _attention_mask(self, sequence_length: int, device: torch.device) -> Tensor | None:
+    def _attention_mask(
+        self,
+        query_length: int,
+        key_length: int,
+        past_length: int,
+        device: torch.device,
+    ) -> Tensor:
+        query_positions = past_length + torch.arange(query_length, device=device)[:, None]
+        key_positions = torch.arange(key_length, device=device)[None, :]
+        mask = key_positions <= query_positions
+        if self.local_window is not None:
+            mask &= key_positions > query_positions - self.local_window
+        return mask
+
+    def _validate_state(self, state: AttentionState, batch_size: int) -> None:
+        expected_prefix = (batch_size, self.num_kv_heads)
+        if state.key.ndim != 4 or tuple(state.key.shape[:2]) != expected_prefix:
+            raise ValueError(
+                "attention key state must have shape "
+                f"[{batch_size}, {self.num_kv_heads}, past_tokens, {self.head_dim}]"
+            )
+        if state.key.shape[-1] != self.head_dim:
+            raise ValueError(f"attention key state head_dim must be {self.head_dim}")
+        if state.value.shape != state.key.shape:
+            raise ValueError("attention key and value states must have identical shapes")
+
+    def _next_state(self, key: Tensor, value: Tensor) -> AttentionState:
         if self.local_window is None:
-            return None
-        positions = torch.arange(sequence_length, device=device)
-        query_positions = positions[:, None]
-        key_positions = positions[None, :]
-        return (key_positions <= query_positions) & (
-            key_positions > query_positions - self.local_window
+            return AttentionState(key=key, value=value)
+        retained_tokens = max(self.local_window - 1, 0)
+        if retained_tokens == 0:
+            return AttentionState(key=key[:, :, :0], value=value[:, :, :0])
+        return AttentionState(
+            key=key[:, :, -retained_tokens:],
+            value=value[:, :, -retained_tokens:],
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(
+        self,
+        x: Tensor,
+        state: AttentionState | None = None,
+    ) -> tuple[Tensor, AttentionState]:
+        batch_size = x.shape[0]
         q = self._shape(self.q_proj(x), self.num_query_heads)
-        k = self._shape(self.k_proj(x), self.num_kv_heads)
-        v = self._shape(self.v_proj(x), self.num_kv_heads)
+        current_k = self._shape(self.k_proj(x), self.num_kv_heads)
+        current_v = self._shape(self.v_proj(x), self.num_kv_heads)
+        past_length = 0
+        if state is not None:
+            self._validate_state(state, batch_size)
+            if state.key.device != x.device or state.key.dtype != x.dtype:
+                raise ValueError("attention state must use the same device and dtype as the input")
+            past_length = state.key.shape[2]
+            current_k = torch.cat((state.key, current_k), dim=2)
+            current_v = torch.cat((state.value, current_v), dim=2)
+
+        next_state = self._next_state(current_k, current_v)
         repeat = self.num_query_heads // self.num_kv_heads
-        k = k.repeat_interleave(repeat, dim=1)
-        v = v.repeat_interleave(repeat, dim=1)
-        mask = self._attention_mask(x.shape[1], x.device)
+        k = current_k.repeat_interleave(repeat, dim=1)
+        v = current_v.repeat_interleave(repeat, dim=1)
+        mask = self._attention_mask(
+            query_length=x.shape[1],
+            key_length=current_k.shape[2],
+            past_length=past_length,
+            device=x.device,
+        )
         attended = F.scaled_dot_product_attention(
             q,
             k,
             v,
             attn_mask=mask,
             dropout_p=self.dropout if self.training else 0.0,
-            is_causal=mask is None,
+            is_causal=False,
         )
         attended = attended.transpose(1, 2).contiguous().view_as(x)
-        return self.out_proj(attended)
+        return self.out_proj(attended), next_state
 
 
 class GlobalSparseAttentionReference(nn.Module):
@@ -203,11 +258,15 @@ class GlobalSparseAttentionReference(nn.Module):
         self.max_tokens = config.global_reference_max_tokens
         self.full_attention = GQAAttentionReference(config, local_window=None)
 
-    def forward(self, x: Tensor) -> Tensor:
-        if x.shape[1] > self.max_tokens:
+    def forward(
+        self,
+        x: Tensor,
+        state: AttentionState | None = None,
+    ) -> tuple[Tensor, AttentionState]:
+        past_tokens = 0 if state is None else state.key.shape[2]
+        if past_tokens + x.shape[1] > self.max_tokens:
             raise RuntimeError(
                 "global sparse production kernel is not implemented; "
-                f"reference fallback is limited to {self.max_tokens} tokens"
+                f"reference fallback is limited to {self.max_tokens} total cached tokens"
             )
-        return self.full_attention(x)
-
+        return self.full_attention(x, state)

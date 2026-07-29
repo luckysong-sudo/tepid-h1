@@ -99,7 +99,7 @@ class TepidH1Config:
         return asdict(self)
 
     @classmethod
-    def prototype(cls) -> "TepidH1Config":
+    def prototype(cls) -> TepidH1Config:
         """Small CPU-friendly shape for API and correctness tests."""
         return cls(
             vocab_size=4096,
@@ -119,7 +119,7 @@ class TepidH1Config:
         )
 
     @classmethod
-    def reference_28b_a7b(cls) -> "TepidH1Config":
+    def reference_28b_a7b(cls) -> TepidH1Config:
         return cls(
             vocab_size=81920,
             hidden_size=3072,

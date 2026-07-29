@@ -9,6 +9,7 @@ Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**�
 - Gated Delta Memory 的逐 Token 正确性参考实现；
 - 局部 GQA 精确注意力；
 - 全局注意力的安全参考回退（当前不是生产级稀疏内核）；
+- Delta 与注意力 KV 状态续传，支持整模型分块一致性验证；
 - Dense SwiGLU 与 Top-K Routed MoE 参考实现；
 - Tepid-H1 Backbone 与 Causal LM 装配；
 - 外置 Agent Runtime、Policy、Tool、Verifier 协议；
@@ -39,6 +40,9 @@ pip install -e '.[dev]'
 pytest
 ```
 
+持续集成会在每次推送和 Pull Request 上安装 CPU 参考环境，执行 Ruff 与完整的
+9 项配置、Runtime、模型前向、梯度和分块一致性测试。
+
 ## 目录
 
 ```text
@@ -52,4 +56,3 @@ docs/
   ARCHITECTURE.md       实现边界与后端替换约定
 tests/                  配置、Runtime 与模型烟雾测试
 ```
-
