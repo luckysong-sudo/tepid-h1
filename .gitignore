@@ -8,7 +8,6 @@ build/
 dist/
 *.egg-info/
 checkpoints/
-data/
+/data/
 outputs/
 wandb/
-

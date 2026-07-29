@@ -21,3 +21,4 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: ruff check src tests
       - run: python -m unittest discover -s tests -p "test_*.py" -v
+      - run: tepid-h1 data-audit configs/data_inventory.example.json

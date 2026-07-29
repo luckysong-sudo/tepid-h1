@@ -14,6 +14,7 @@ Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**�
 - Tepid-H1 Backbone 与 Causal LM 装配；
 - 外置 Agent Runtime、Policy、Tool、Verifier 协议；
 - M0—M5 阶段门配置和标准库测试。
+- 可失败关闭的数据资产清单审计与 64K/80K/96K Tokenizer 对比工具。
 
 ## 明确限制
 
@@ -41,7 +42,15 @@ pytest
 ```
 
 持续集成会在每次推送和 Pull Request 上安装 CPU 参考环境，执行 Ruff 与完整的
-9 项配置、Runtime、模型前向、梯度和分块一致性测试。
+15 项配置、数据治理、Tokenizer、Runtime、模型前向、梯度和分块一致性测试。
+
+M0 数据资产审计：
+
+```bash
+PYTHONPATH=src python -m tepid_h1.cli data-audit configs/data_inventory.example.json
+```
+
+真实 Tokenizer 对比的输入与命令约定见 `docs/M0_DATA_GOVERNANCE.md`。
 
 ## 目录
 

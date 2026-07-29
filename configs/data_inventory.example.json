@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "inventory_id": "tepid-h1-m0-synthetic-example",
+  "owner": "Tepid-H1 Data",
+  "generated_at": "2026-07-29T00:00:00Z",
+  "sources": [
+    {
+      "id": "synthetic-fixture-v1",
+      "name": "Synthetic CI fixture",
+      "uri": "repo://tests/fixtures/synthetic",
+      "snapshot": "v1",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "license_id": "CC0-1.0",
+      "license_category": "public_domain",
+      "commercial_use": true,
+      "rights_evidence": "docs/M0_DATA_GOVERNANCE.md#synthetic-fixture",
+      "languages": ["zh", "en"],
+      "domains": ["synthetic", "code"],
+      "estimated_tokens": 1000,
+      "pii_status": "absent",
+      "quality_status": "accepted"
+    }
+  ],
+  "repository_decontamination": {
+    "status": "complete",
+    "method": "Exact hash comparison against synthetic held-out fixtures",
+    "benchmark_sets": ["synthetic-ci-heldout-v1"],
+    "report_uri": "docs/M0_DATA_GOVERNANCE.md#repository-decontamination",
+    "completed_at": "2026-07-29T00:00:00Z"
+  }
+}

@@ -18,6 +18,9 @@ dev = [
     "pytest>=8",
     "ruff>=0.9",
 ]
+tokenizer-eval = [
+    "tokenizers>=0.21,<1",
+]
 
 [project.scripts]
 tepid-h1 = "tepid_h1.cli:main"
