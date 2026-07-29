@@ -18,7 +18,9 @@ from tepid_h1.integrations import ZeroGPUJobConfig, run_zero_gpu_job
 ROOT = Path(__file__).resolve().parent
 CORE_REVISION = "8cf9dba8764db5b96fa9ab3d7e64dd0927c5294e"
 CORE_REPOSITORY = "https://github.com/luckysong-sudo/tepid-h1.git"
-QUALITY_GATE_TIMEOUT_SECONDS = 270
+DASHBOARD_REVISION = "c62c5a17543451d7bd81ce302c74a14949da4e2b"
+DASHBOARD_REPOSITORY = "https://github.com/luckysong-sudo/tepid-h1-progress.git"
+QUALITY_GATE_TIMEOUT_SECONDS = 290
 
 
 def _persist_report(report: dict, prefix: str) -> str:
@@ -97,6 +99,9 @@ def _run_check(
         if isinstance(captured, bytes):
             captured = captured.decode(errors="replace")
         output = f"{captured[-3_800:]}\ncheck timed out"
+        returncode = None
+    except OSError as error:
+        output = f"{type(error).__name__}: {error}"
         returncode = None
     return {
         "name": name,
@@ -323,10 +328,58 @@ def run_remote_quality_gate():
                     )
                 )
 
+        dashboard_checkout = root / "dashboard"
+        checks.append(
+            _run_check(
+                "fetch_dashboard_source",
+                [
+                    "git",
+                    "clone",
+                    DASHBOARD_REPOSITORY,
+                    str(dashboard_checkout),
+                ],
+                working_directory=root,
+                deadline=deadline,
+            )
+        )
+        if checks[-1]["passed"]:
+            checks.append(
+                _run_check(
+                    "checkout_dashboard_revision",
+                    [
+                        "git",
+                        "checkout",
+                        "--detach",
+                        DASHBOARD_REVISION,
+                    ],
+                    working_directory=dashboard_checkout,
+                    deadline=deadline,
+                )
+            )
+        if checks[-1]["passed"]:
+            checks.append(
+                _run_check(
+                    "dashboard_dependencies",
+                    ["npm", "ci", "--ignore-scripts"],
+                    working_directory=dashboard_checkout,
+                    deadline=deadline,
+                )
+            )
+        if checks[-1]["passed"]:
+            checks.append(
+                _run_check(
+                    "dashboard_checks",
+                    ["npm", "run", "check"],
+                    working_directory=dashboard_checkout,
+                    deadline=deadline,
+                )
+            )
+
     report = {
         "schema_version": 1,
         "experiment": "remote_zero_gpu_quality_gate",
         "core_revision": CORE_REVISION,
+        "dashboard_revision": DASHBOARD_REVISION,
         "environment": {
             "python": platform.python_version(),
             "torch": torch.__version__,
