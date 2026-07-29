@@ -28,3 +28,41 @@ plumbing smoke. It does not establish model quality or a stable performance rati
 single measured step has no variance estimate, the smoke model is tiny, and the hybrid
 path still contains Python correctness references. Decision-grade comparison requires
 longer measurement windows, repeated trials and optimized target-hardware operators.
+
+## 2026-07-29 repeated BF16 smoke
+
+The same public Space subsequently completed the adapter's maximum bounded workload:
+five synchronized training steps across three paired trials. Both models processed the
+same preloaded batches and were matched on the per-token active-parameter proxy with a
+0.0% gap.
+
+- Workload: five steps, three trials, batch size 1, sequence length 8
+- Tokens trained per model: 35 per trial, 105 total
+- Batch SHA-256:
+  `ac718cb1516251d37de74f5de6f8fa2d6aae9d8ba64e492819598a961a8a07ee`
+- Hybrid throughput: 121.989 tokens/second mean
+  (95% CI 79.927–164.050)
+- Baseline throughput: 337.753 tokens/second mean
+  (95% CI 274.567–400.939)
+- Baseline/hybrid throughput ratio: 2.845 geometric mean
+  (95% CI 2.200–3.680)
+- Hybrid loss change: +0.0274 mean (95% CI -0.0096–+0.0645)
+- Baseline loss change: -0.0617 mean (95% CI -0.1787–+0.0552)
+- Hybrid-minus-baseline loss-change difference: +0.0891 mean
+  (95% CI -0.0348–+0.2130)
+- Hybrid allocator peak: 19,340,288 bytes
+- Baseline allocator peak: 19,321,344 bytes
+- Persistent report:
+  `/data/reports/tepid-h1-5520abb5bae84d3eab0cbcaae71424fa.json`
+  in `himartoffice/Tepid-H1-storage`
+
+The throughput interval identifies an engineering bottleneck in the current tiny,
+eager/reference hybrid implementation: the baseline is faster under this workload.
+This result prioritizes optimization of the Delta, attention and MoE operator paths
+before scaling the training window. It is not evidence against the target architecture,
+whose optimized kernels do not exist yet.
+
+The paired loss-change interval crosses zero, so this smoke provides no evidence of a
+quality difference. Three tiny trials remain far below a decision-grade model-quality
+experiment; their purpose is reproducible execution, variance reporting and early
+performance diagnosis.
