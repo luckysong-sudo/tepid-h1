@@ -2,8 +2,9 @@
 
 M1 requires a standard Transformer control for hybrid architecture comparisons. The
 reference baseline uses the same vocabulary, hidden size, layer count, GQA head geometry,
-normalization, embedding tying and initialization as Tepid-H1, while replacing every
-sequence mixer with full causal GQA and every channel mixer with Dense SwiGLU.
+rotary position encoding, normalization, embedding tying and initialization as Tepid-H1,
+while replacing every sequence mixer with full causal GQA and every channel mixer with
+Dense SwiGLU.
 
 ## Matching rule
 

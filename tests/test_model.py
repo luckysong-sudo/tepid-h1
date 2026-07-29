@@ -111,6 +111,48 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(len(second.delta_states), 5)
         self.assertEqual(len(second.attention_states), 3)
 
+    def test_model_multiple_chunks_match_after_local_cache_trim(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+
+        torch.manual_seed(13)
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config).eval()
+        input_ids = torch.randint(0, config.vocab_size, (1, 33))
+
+        with torch.no_grad():
+            full = model(input_ids)
+            outputs = []
+            delta_states = None
+            attention_states = None
+            offset = 0
+            for width in (5, 13, 7, 8):
+                chunk = model(
+                    input_ids[:, offset : offset + width],
+                    delta_states=delta_states,
+                    attention_states=attention_states,
+                )
+                outputs.append(chunk.logits)
+                delta_states = chunk.delta_states
+                attention_states = chunk.attention_states
+                offset += width
+                self.assertTrue(
+                    all(state.tokens_seen == offset for state in attention_states)
+                )
+                self.assertTrue(
+                    all(
+                        state.key.shape[2] <= config.local_window - 1
+                        for state in attention_states[:2]
+                    )
+                )
+
+        torch.testing.assert_close(
+            torch.cat(outputs, dim=1),
+            full.logits,
+            rtol=1e-5,
+            atol=1e-6,
+        )
+
     def test_local_attention_cache_is_bounded(self):
         from tepid_h1.config import TepidH1Config
         from tepid_h1.modeling.layers import GQAAttentionReference
@@ -122,6 +164,72 @@ class ModelTests(unittest.TestCase):
         _, state = layer(x)
         self.assertEqual(state.key.shape[2], 3)
         self.assertEqual(state.value.shape, state.key.shape)
+        self.assertEqual(state.tokens_seen, 6)
+
+    def test_rotary_positions_change_phase_and_preserve_norm(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GQAAttentionReference
+
+        config = TepidH1Config.smoke()
+        layer = GQAAttentionReference(config, local_window=4).eval()
+        projected = torch.randn(1, config.num_query_heads, 1, config.head_dim)
+
+        at_zero = layer._apply_rotary(projected, 0)
+        at_one = layer._apply_rotary(projected, 1)
+
+        torch.testing.assert_close(at_zero, projected)
+        self.assertFalse(torch.allclose(at_one, projected))
+        torch.testing.assert_close(
+            at_one.float().norm(dim=-1),
+            projected.float().norm(dim=-1),
+            rtol=1e-5,
+            atol=1e-6,
+        )
+
+    def test_native_gqa_matches_explicit_reference_forward_state_and_gradients(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import (
+            GQAAttentionNative,
+            GQAAttentionReference,
+        )
+
+        torch.manual_seed(29)
+        config = TepidH1Config.smoke()
+        reference = GQAAttentionReference(config, local_window=4)
+        candidate = GQAAttentionNative(config, local_window=4)
+        candidate.load_state_dict(reference.state_dict())
+        reference_input = torch.randn(2, 7, config.hidden_size, requires_grad=True)
+        candidate_input = reference_input.detach().clone().requires_grad_(True)
+
+        reference_output, reference_state = reference(reference_input)
+        candidate_output, candidate_state = candidate(candidate_input)
+        (
+            reference_output.square().mean()
+            + reference_state.key.square().mean()
+            + reference_state.value.square().mean()
+        ).backward()
+        (
+            candidate_output.square().mean()
+            + candidate_state.key.square().mean()
+            + candidate_state.value.square().mean()
+        ).backward()
+
+        torch.testing.assert_close(candidate_output, reference_output, rtol=1e-5, atol=1e-6)
+        torch.testing.assert_close(candidate_state.key, reference_state.key)
+        torch.testing.assert_close(candidate_state.value, reference_state.value)
+        self.assertEqual(candidate_state.tokens_seen, reference_state.tokens_seen)
+        torch.testing.assert_close(candidate_input.grad, reference_input.grad, rtol=1e-5, atol=1e-6)
+        for candidate_parameter, reference_parameter in zip(
+            candidate.parameters(),
+            reference.parameters(),
+            strict=True,
+        ):
+            torch.testing.assert_close(
+                candidate_parameter.grad,
+                reference_parameter.grad,
+                rtol=1e-5,
+                atol=1e-6,
+            )
 
     def test_local_attention_chunk_boundary_matches_single_pass(self):
         from tepid_h1.config import TepidH1Config
@@ -133,11 +241,52 @@ class ModelTests(unittest.TestCase):
         x = torch.randn(1, 7, config.hidden_size)
 
         full_output, _ = layer(x)
-        first_output, state = layer(x[:, :3])
-        second_output, _ = layer(x[:, 3:], state)
+        first_output, state = layer(x[:, :5])
+        self.assertEqual(state.key.shape[2], 3)
+        self.assertEqual(state.tokens_seen, 5)
+        second_output, final_state = layer(x[:, 5:], state)
         chunked_output = torch.cat((first_output, second_output), dim=1)
 
         torch.testing.assert_close(chunked_output, full_output, rtol=1e-5, atol=1e-6)
+        self.assertEqual(final_state.tokens_seen, 7)
+
+    def test_local_attention_multiple_cache_trims_preserve_positions(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GQAAttentionReference
+
+        torch.manual_seed(23)
+        config = TepidH1Config.smoke()
+        layer = GQAAttentionReference(config, local_window=4).eval()
+        x = torch.randn(1, 13, config.hidden_size)
+
+        full_output, _ = layer(x)
+        outputs = []
+        state = None
+        offset = 0
+        for width in (2, 5, 1, 5):
+            output, state = layer(x[:, offset : offset + width], state)
+            outputs.append(output)
+            offset += width
+            self.assertEqual(state.tokens_seen, offset)
+            self.assertLessEqual(state.key.shape[2], 3)
+
+        torch.testing.assert_close(
+            torch.cat(outputs, dim=1),
+            full_output,
+            rtol=1e-5,
+            atol=1e-6,
+        )
+
+    def test_attention_rejects_positions_beyond_configured_limit(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GQAAttentionReference
+
+        config = TepidH1Config.smoke()
+        layer = GQAAttentionReference(config, local_window=4).eval()
+        x = torch.randn(1, config.max_position_embeddings + 1, config.hidden_size)
+
+        with self.assertRaisesRegex(RuntimeError, "max_position_embeddings"):
+            layer(x)
 
 
 if __name__ == "__main__":

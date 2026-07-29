@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from tepid_h1.config import ChannelMixer, SequenceMixer, TepidH1Config
 
@@ -41,7 +42,13 @@ class ConfigTests(unittest.TestCase):
                 max_position_embeddings=32,
             )
 
+    def test_rotary_configuration_is_validated(self) -> None:
+        config = TepidH1Config.smoke()
+        with self.assertRaisesRegex(ValueError, "head_dim must be even"):
+            replace(config, hidden_size=28, head_dim=7)
+        with self.assertRaisesRegex(ValueError, "rotary_theta"):
+            replace(config, rotary_theta=0)
+
 
 if __name__ == "__main__":
     unittest.main()
-

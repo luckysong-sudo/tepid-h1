@@ -8,7 +8,7 @@ from torch import Tensor, nn
 
 from tepid_h1.config import TepidH1Config
 
-from .layers import AttentionState, GQAAttentionReference, RMSNorm, SwiGLU
+from .layers import AttentionState, GQAAttentionNative, RMSNorm, SwiGLU
 from .model import TepidH1Output, _causal_lm_loss
 
 
@@ -117,7 +117,7 @@ class TransformerBaselineBlock(nn.Module):
         model = config.model
         self.sequence_norm = RMSNorm(model.hidden_size, model.rms_norm_eps)
         self.channel_norm = RMSNorm(model.hidden_size, model.rms_norm_eps)
-        self.attention = GQAAttentionReference(model, local_window=None)
+        self.attention = GQAAttentionNative(model, local_window=None)
         self.channel = SwiGLU(model.hidden_size, config.intermediate_size)
         self.alpha = nn.Parameter(torch.full((), 0.1))
         self.beta = nn.Parameter(torch.full((), 0.1))

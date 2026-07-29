@@ -47,14 +47,27 @@ query-selected blocks separately so their recall and cost can be measured.
 
 Every Delta layer returns one recurrent matrix state. Every attention layer returns one
 `AttentionState` containing projected KV tensors in `[batch, kv_head, token, head_dim]`
-orientation. `TepidH1Output` keeps these as separate ordered tuples so a caller can feed
-both back on the next chunk without coupling unlike state types.
+orientation plus the absolute number of tokens seen. Query and key projections use
+interleaved rotary position encoding with the configured `rotary_theta`; cached keys are
+stored after rotation. Tracking the absolute position separately from retained KV length
+keeps chunked execution positionally identical even after a local-attention cache is
+trimmed. Calls fail closed beyond `max_position_embeddings`.
+
+`TepidH1Output` keeps Delta and attention states as separate ordered tuples so a caller can
+feed both back on the next chunk without coupling unlike state types.
 
 Local attention retains at most `local_window - 1` previous KV entries: this is sufficient
 for the first token of the next chunk and bounds decode memory. The global reference retains
 the complete KV history up to `global_reference_max_tokens`. A production sparse backend
 may use a different physical layout, but must preserve full-pass versus chunked output
 agreement at declared boundaries.
+
+`GQAAttentionReference` explicitly repeats KV heads and remains the independent grouped-query
+correctness oracle. Model and baseline paths use `GQAAttentionNative`, which delegates
+grouped-query expansion to PyTorch SDPA through `enable_gqa` and therefore does not
+materialize repeated KV tensors. Both classes share projections, RoPE, cache layout and
+state-dict structure; tests compare their outputs, streaming state, input gradients and all
+parameter gradients.
 
 ## Agent boundary
 

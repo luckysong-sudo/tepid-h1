@@ -12,7 +12,7 @@ from .layers import (
     AttentionState,
     GatedDeltaMemoryEager,
     GlobalSparseAttentionReference,
-    GQAAttentionReference,
+    GQAAttentionNative,
     RMSNorm,
     RoutedMoEReference,
     SwiGLU,
@@ -46,7 +46,7 @@ class TepidH1Block(nn.Module):
         if sequence is SequenceMixer.DELTA:
             self.sequence_mixer: nn.Module = GatedDeltaMemoryEager(config)
         elif sequence is SequenceMixer.LOCAL_ATTENTION:
-            self.sequence_mixer = GQAAttentionReference(config, local_window=config.local_window)
+            self.sequence_mixer = GQAAttentionNative(config, local_window=config.local_window)
         else:
             self.sequence_mixer = GlobalSparseAttentionReference(config)
 

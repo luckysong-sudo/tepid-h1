@@ -56,6 +56,7 @@ class TepidH1Config:
     tie_word_embeddings: bool = True
     initializer_range: float = 0.02
     global_reference_max_tokens: int = 2048
+    rotary_theta: float = 10_000.0
 
     def __post_init__(self) -> None:
         errors: list[str] = []
@@ -65,6 +66,8 @@ class TepidH1Config:
             errors.append("hidden_size must equal num_query_heads * head_dim")
         if self.num_query_heads % self.num_kv_heads:
             errors.append("num_query_heads must be divisible by num_kv_heads")
+        if self.head_dim % 2:
+            errors.append("head_dim must be even for rotary position encoding")
         if not 1 <= self.moe_top_k <= self.moe_num_experts:
             errors.append("moe_top_k must be between 1 and moe_num_experts")
         if self.local_window <= 0:
@@ -73,6 +76,8 @@ class TepidH1Config:
             errors.append("max_position_embeddings must be >= local_window")
         if not 0.0 <= self.dropout < 1.0:
             errors.append("dropout must be in [0, 1)")
+        if self.rotary_theta <= 0:
+            errors.append("rotary_theta must be positive")
         if errors:
             raise ValueError("; ".join(errors))
 
