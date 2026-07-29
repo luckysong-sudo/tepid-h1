@@ -43,6 +43,16 @@ to acquire a remote GPU by itself. The same command and report schema can theref
 a Space callback, a conventional CUDA runner or a paid training machine without changing
 the comparison protocol.
 
+The deployable bundle in `integrations/huggingface-zero-gpu/` follows the official Gradio
+and `@spaces.GPU` contract. Copy that directory to the root of a Hugging Face Space, select
+ZeroGPU in its hardware settings, and invoke the UI or generated Gradio API endpoint. The
+bundle pins the Tepid-H1 core revision, bounds public inputs, binds the synthetic corpus to
+its audited digest and returns a downloadable JSON report.
+
+Hugging Face currently documents that ZeroGPU does not support runtime `torch.compile`.
+Accordingly, the Space runs the CUDA paired smoke only. `delta-validate --backend inductor`
+requires a conventional CUDA runner until an ahead-of-time compiled candidate is provided.
+
 The current smoke configuration is intentionally tiny. A successful CUDA report proves
 device compatibility and measurement plumbing only; it is not the M1 350M target-hardware
 benchmark.

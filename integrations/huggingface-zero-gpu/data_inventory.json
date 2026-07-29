@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "inventory_id": "tepid-h1-zerogpu-synthetic-v1",
+  "owner": "Tepid-H1 Data",
+  "generated_at": "2026-07-29T00:00:00Z",
+  "sources": [
+    {
+      "id": "synthetic-fixture-v1",
+      "name": "Synthetic governed paired-experiment fixture",
+      "uri": "repo://paired_corpus.jsonl",
+      "snapshot": "v1",
+      "sha256": "882c60467be6da41b53ec15a650d25d5e3f612c2e32da332bb258bb36e76aa0b",
+      "license_id": "CC0-1.0",
+      "license_category": "public_domain",
+      "commercial_use": true,
+      "rights_evidence": "README.md#data-boundary",
+      "languages": ["zh", "en"],
+      "domains": ["synthetic", "code"],
+      "estimated_tokens": 72,
+      "pii_status": "absent",
+      "quality_status": "accepted"
+    }
+  ],
+  "repository_decontamination": {
+    "status": "complete",
+    "method": "Exact hash comparison against synthetic held-out fixtures",
+    "benchmark_sets": ["synthetic-ci-heldout-v1"],
+    "report_uri": "README.md#data-boundary",
+    "completed_at": "2026-07-29T00:00:00Z"
+  }
+}

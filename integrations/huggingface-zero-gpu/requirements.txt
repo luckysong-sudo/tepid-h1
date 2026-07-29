@@ -1,0 +1,3 @@
+torch>=2.8,<2.12
+gradio>=4,<7
+tepid-h1 @ git+https://github.com/luckysong-sudo/tepid-h1.git@a39d279438ac5e25f893b4d8a5f16047b6469a88

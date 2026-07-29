@@ -1,0 +1,6 @@
+{"id":"synthetic-zh-001","source_id":"synthetic-fixture-v1","domain":"zh","token_ids":[1,17,23,31,9,44,12,58,6,71,19,2]}
+{"id":"synthetic-en-001","source_id":"synthetic-fixture-v1","domain":"en","token_ids":[1,8,15,22,29,36,43,50,57,64,72,2]}
+{"id":"synthetic-code-001","source_id":"synthetic-fixture-v1","domain":"code","token_ids":[1,91,14,92,27,93,40,94,53,95,66,2]}
+{"id":"synthetic-zh-002","source_id":"synthetic-fixture-v1","domain":"zh","token_ids":[1,18,25,32,11,45,13,59,7,73,20,2]}
+{"id":"synthetic-en-002","source_id":"synthetic-fixture-v1","domain":"en","token_ids":[1,10,16,24,30,38,46,52,60,68,76,2]}
+{"id":"synthetic-code-002","source_id":"synthetic-fixture-v1","domain":"code","token_ids":[1,96,21,97,34,98,47,99,61,100,74,2]}
