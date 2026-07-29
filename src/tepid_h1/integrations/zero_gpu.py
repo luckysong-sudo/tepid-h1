@@ -21,6 +21,10 @@ class ZeroGPUJobConfig:
     seed: int = 37
 
     def __post_init__(self) -> None:
+        if not isinstance(self.steps, int) or isinstance(self.steps, bool):
+            raise TypeError("ZeroGPU steps must be an integer")
+        if not isinstance(self.trials, int) or isinstance(self.trials, bool):
+            raise TypeError("ZeroGPU trials must be an integer")
         if not 1 <= self.steps <= 5:
             raise ValueError("ZeroGPU steps must be between 1 and 5")
         if not 1 <= self.trials <= 3:

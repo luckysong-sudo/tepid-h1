@@ -41,6 +41,8 @@ class ZeroGPUAdapterTests(unittest.TestCase):
             ZeroGPUJobConfig(trials=4)
         with self.assertRaisesRegex(ValueError, "dtype"):
             ZeroGPUJobConfig(dtype="float64")
+        with self.assertRaisesRegex(TypeError, "integer"):
+            ZeroGPUJobConfig(steps=1.5)
 
 
 if __name__ == "__main__":
