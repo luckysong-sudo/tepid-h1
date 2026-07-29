@@ -119,6 +119,26 @@ class TepidH1Config:
         )
 
     @classmethod
+    def smoke(cls) -> TepidH1Config:
+        """Tiny all-module shape for training and checkpoint smoke tests."""
+        return cls(
+            vocab_size=128,
+            hidden_size=32,
+            num_layers=8,
+            num_query_heads=4,
+            num_kv_heads=2,
+            head_dim=8,
+            local_window=16,
+            dense_intermediate_size=64,
+            moe_num_experts=4,
+            moe_top_k=2,
+            moe_expert_intermediate_size=32,
+            moe_shared_intermediate_size=64,
+            max_position_embeddings=64,
+            global_reference_max_tokens=64,
+        )
+
+    @classmethod
     def reference_28b_a7b(cls) -> TepidH1Config:
         return cls(
             vocab_size=81920,
@@ -136,4 +156,3 @@ class TepidH1Config:
             max_position_embeddings=32768,
             global_reference_max_tokens=2048,
         )
-

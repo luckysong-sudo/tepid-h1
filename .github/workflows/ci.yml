@@ -26,3 +26,5 @@ jobs:
           tepid-h1 decontaminate
           --training configs/decontamination_training.example.jsonl
           --benchmark configs/decontamination_benchmark.example.jsonl
+      - run: tepid-h1 train-smoke --steps 1 --checkpoint /tmp/tepid-h1-smoke.pt
+      - run: tepid-h1 train-smoke --steps 1 --checkpoint /tmp/tepid-h1-smoke.pt --resume

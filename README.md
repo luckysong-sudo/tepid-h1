@@ -12,6 +12,7 @@ Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**�
 - Delta 与注意力 KV 状态续传，支持整模型分块一致性验证；
 - Dense SwiGLU 与 Top-K Routed MoE 参考实现；
 - Tepid-H1 Backbone 与 Causal LM 装配；
+- 自回归损失、有限值检查、梯度裁剪与可恢复 checkpoint 的最小训练闭环；
 - 外置 Agent Runtime、Policy、Tool、Verifier 协议；
 - M0—M5 阶段门配置和标准库测试。
 - 可失败关闭的数据资产清单审计、去污染检测与 64K/80K/96K Tokenizer 对比工具。
@@ -42,7 +43,7 @@ pytest
 ```
 
 持续集成会在每次推送和 Pull Request 上安装 CPU 参考环境，执行 Ruff 与完整的
-19 项配置、数据治理、去污染、Tokenizer、Runtime、模型前向、梯度和分块一致性测试。
+24 项配置、数据治理、训练恢复、Tokenizer、Runtime、模型前向、梯度和分块一致性测试。
 
 M0 数据资产审计：
 

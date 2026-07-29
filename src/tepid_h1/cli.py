@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="repeat exactly three times for 64000, 80000 and 96000",
     )
     tokenizer.add_argument("--report", type=Path)
+    training = subparsers.add_parser(
+        "train-smoke",
+        help="run a tiny deterministic causal-LM training loop",
+    )
+    training.add_argument("--steps", type=int, default=1)
+    training.add_argument("--batch-size", type=int, default=1)
+    training.add_argument("--sequence-length", type=int, default=8)
+    training.add_argument("--learning-rate", type=float, default=1e-3)
+    training.add_argument("--seed", type=int, default=17)
+    training.add_argument("--checkpoint", type=Path)
+    training.add_argument("--resume", action="store_true")
     return parser
 
 
@@ -153,6 +165,64 @@ def main() -> int:
             "selection": select_candidate(candidates),
         }
         _write_payload(payload, args.report)
+        return 0
+    if args.command == "train-smoke":
+        if args.steps <= 0 or args.batch_size <= 0:
+            raise ValueError("steps and batch-size must be positive")
+        if not 2 <= args.sequence_length <= 64:
+            raise ValueError("sequence-length must be between 2 and 64")
+        if args.learning_rate <= 0:
+            raise ValueError("learning-rate must be positive")
+        if args.resume and args.checkpoint is None:
+            raise ValueError("--resume requires --checkpoint")
+
+        import torch
+
+        from .modeling import TepidH1CausalLM
+        from .training import causal_lm_train_step, load_checkpoint, save_checkpoint
+
+        torch.manual_seed(args.seed)
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+        starting_step = 0
+        if args.resume:
+            if not args.checkpoint.exists():
+                raise FileNotFoundError(args.checkpoint)
+            starting_step = load_checkpoint(
+                args.checkpoint,
+                model=model,
+                optimizer=optimizer,
+            ).step
+
+        metrics = []
+        for _ in range(args.steps):
+            input_ids = torch.randint(
+                0,
+                config.vocab_size,
+                (args.batch_size, args.sequence_length),
+            )
+            metrics.append(asdict(causal_lm_train_step(model, input_ids, optimizer)))
+        final_step = starting_step + args.steps
+        if args.checkpoint is not None:
+            save_checkpoint(
+                args.checkpoint,
+                model=model,
+                optimizer=optimizer,
+                step=final_step,
+                metadata={"command": "train-smoke", "seed": args.seed},
+            )
+        _write_payload(
+            {
+                "schema_version": 1,
+                "config": config.to_dict(),
+                "starting_step": starting_step,
+                "final_step": final_step,
+                "metrics": metrics,
+                "checkpoint": str(args.checkpoint) if args.checkpoint else None,
+            },
+            None,
+        )
         return 0
     raise AssertionError(f"unsupported command: {args.command}")
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import torch
 from torch import Tensor, nn
+from torch.nn import functional as F
 
 from tepid_h1.config import ChannelMixer, SequenceMixer, TepidH1Config
 
@@ -19,7 +20,9 @@ from .layers import (
 
 
 class TepidH1Block(nn.Module):
-    def __init__(self, config: TepidH1Config, sequence: SequenceMixer, channel: ChannelMixer) -> None:
+    def __init__(
+        self, config: TepidH1Config, sequence: SequenceMixer, channel: ChannelMixer
+    ) -> None:
         super().__init__()
         self.sequence_kind = sequence
         self.channel_kind = channel
@@ -72,6 +75,7 @@ class TepidH1Output:
     delta_states: tuple[Tensor, ...]
     attention_states: tuple[AttentionState, ...]
     logits: Tensor | None = None
+    loss: Tensor | None = None
 
 
 class TepidH1Model(nn.Module):
@@ -80,8 +84,7 @@ class TepidH1Model(nn.Module):
         self.config = config
         self.token_embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
         self.layers = nn.ModuleList(
-            TepidH1Block(config, layer.sequence, layer.channel)
-            for layer in config.layer_plan
+            TepidH1Block(config, layer.sequence, layer.channel) for layer in config.layer_plan
         )
         self.final_norm = RMSNorm(config.hidden_size, config.rms_norm_eps)
         self.apply(self._initialize)
@@ -146,6 +149,7 @@ class TepidH1CausalLM(nn.Module):
         *,
         delta_states: tuple[Tensor, ...] | None = None,
         attention_states: tuple[AttentionState, ...] | None = None,
+        labels: Tensor | None = None,
     ) -> TepidH1Output:
         output = self.model(
             input_ids,
@@ -153,4 +157,14 @@ class TepidH1CausalLM(nn.Module):
             attention_states=attention_states,
         )
         output.logits = self.lm_head(output.last_hidden_state)
+        if labels is not None:
+            if labels.shape != input_ids.shape:
+                raise ValueError("labels must have the same shape as input_ids")
+            if labels.shape[1] < 2:
+                raise ValueError("causal language-model loss requires at least two tokens")
+            output.loss = F.cross_entropy(
+                output.logits[:, :-1].contiguous().float().view(-1, self.config.vocab_size),
+                labels[:, 1:].contiguous().view(-1),
+                ignore_index=-100,
+            )
         return output
