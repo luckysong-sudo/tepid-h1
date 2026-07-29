@@ -14,6 +14,12 @@ distributed trainer and must not be used to claim 350M or larger-scale readiness
 - Governed training binds the checkpoint to the corpus digest, inventory digest, source,
   batch shape, sequence length, complete AdamW recipe, gradient clipping, scheduler horizon
   and seed.
+- Optional governed validation must use a different file digest, source ID and set of record
+  IDs from training. Its lineage and fixed batch digest are bound into the checkpoint
+  contract.
+- Validation runs before and after each command under `eval()` and `torch.no_grad()`, reports
+  token-weighted loss and perplexity, and restores the model's prior training mode without
+  creating gradients or optimizer updates.
 - Governed resume advances the corpus from the global checkpoint step and fails closed if
   either the data lineage or training contract changes, or if the scheduler step diverges
   from the checkpoint step.
@@ -43,6 +49,8 @@ tepid-h1 train-smoke \
   --total-steps 10 \
   --warmup-steps 2 \
   --corpus configs/paired_corpus.example.jsonl \
+  --validation-corpus configs/validation_corpus.example.jsonl \
+  --validation-steps 3 \
   --inventory configs/data_inventory.example.json \
   --checkpoint /tmp/tepid-h1-governed.pt \
   --report /tmp/tepid-h1-governed.json
@@ -52,6 +60,8 @@ tepid-h1 train-smoke \
   --total-steps 10 \
   --warmup-steps 2 \
   --corpus configs/paired_corpus.example.jsonl \
+  --validation-corpus configs/validation_corpus.example.jsonl \
+  --validation-steps 3 \
   --inventory configs/data_inventory.example.json \
   --checkpoint /tmp/tepid-h1-governed.pt \
   --report /tmp/tepid-h1-governed-resume.json \
@@ -61,6 +71,8 @@ tepid-h1 train-smoke \
 The first command consumes corpus step 0; the resumed command starts from corpus step 1.
 The report records both file digests, the inventory/source identifiers, the exact selected
 batch digest, per-step learning rate, scheduler state and the half-open global step interval.
+When validation is enabled, it also records the independently governed validation lineage,
+fixed validation batch digest, pre/post token-weighted loss and perplexity, and both changes.
 Changing the corpus, inventory or bound training recipe causes resume to stop before another
 optimizer update. A requested run cannot cross the declared scheduler horizon.
 

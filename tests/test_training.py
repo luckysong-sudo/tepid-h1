@@ -44,6 +44,37 @@ class TrainingTests(unittest.TestCase):
         self.assertEqual(metrics.trained_tokens, 7)
         self.assertFalse(torch.equal(before, model.model.token_embeddings.weight))
 
+    def test_evaluation_is_no_grad_and_restores_training_mode(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import evaluate_causal_lm
+
+        torch.manual_seed(27)
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        model.train()
+        batches = tuple(
+            torch.randint(0, config.vocab_size, (1, 6)) for _ in range(2)
+        )
+        parameters_before = tuple(
+            parameter.detach().clone() for parameter in model.parameters()
+        )
+
+        metrics = evaluate_causal_lm(model, batches)
+
+        self.assertGreater(metrics.loss, 0)
+        self.assertGreater(metrics.perplexity, 1)
+        self.assertEqual(metrics.evaluated_tokens, 10)
+        self.assertEqual(metrics.batches, 2)
+        self.assertTrue(model.training)
+        for before, after in zip(
+            parameters_before,
+            model.parameters(),
+            strict=True,
+        ):
+            torch.testing.assert_close(after, before, rtol=0, atol=0)
+            self.assertIsNone(after.grad)
+
     def test_checkpoint_round_trip_restores_model_and_optimizer(self):
         from tepid_h1.config import TepidH1Config
         from tepid_h1.modeling import TepidH1CausalLM

@@ -62,6 +62,7 @@ class GovernedCorpus:
     batches: tuple[Tensor, ...]
     batch_sha256: str
     start_step: int
+    record_ids: tuple[str, ...]
     file_sha256: str
     inventory_file_sha256: str
     inventory_id: str
@@ -134,6 +135,7 @@ def load_governed_corpus(
         batches=batches,
         batch_sha256=_batch_digest(batches),
         start_step=start_step,
+        record_ids=tuple(str(record["id"]) for record in records),
         file_sha256=checksum,
         inventory_file_sha256=file_sha256(inventory_path),
         inventory_id=audit.inventory_id,
@@ -141,6 +143,21 @@ def load_governed_corpus(
         records=len(records),
         domains=tuple(sorted({str(record["domain"]) for record in records})),
     )
+
+
+def validate_governed_split_isolation(
+    training: GovernedCorpus,
+    validation: GovernedCorpus,
+) -> None:
+    if training.file_sha256 == validation.file_sha256:
+        raise ValueError("training and validation corpus files must be different")
+    if training.source_id == validation.source_id:
+        raise ValueError("training and validation corpora must use different source_id values")
+    overlapping_ids = sorted(set(training.record_ids) & set(validation.record_ids))
+    if overlapping_ids:
+        raise ValueError(
+            "training and validation record IDs overlap: " + ", ".join(overlapping_ids)
+        )
 
 
 def run_paired_smoke(

@@ -22,13 +22,15 @@ pull requests.
 
 ## Synthetic fixture
 
-`synthetic-fixture-v1` is the hand-authored, non-linguistic
-`configs/paired_corpus.example.jsonl` test fixture. It exists only to exercise the schema,
-CI and paired experiment pipeline, contains no collected personal data and is released as
-CC0-1.0. Its inventory entry binds the exact file SHA-256; the experiment loader
-recalculates that digest and rejects modified content until the inventory is intentionally
-updated. Replace it with signed, snapshot-specific evidence before any real training
-decision.
+`synthetic-fixture-v1` and `synthetic-validation-v1` are separate hand-authored,
+non-linguistic training and held-out validation fixtures in
+`configs/paired_corpus.example.jsonl` and
+`configs/validation_corpus.example.jsonl`. They exist only to exercise the schema, CI and
+training control plane, contain no collected personal data and are released as CC0-1.0.
+Their inventory entries bind the exact file SHA-256. The loader recalculates each digest and
+rejects modified content until the inventory is intentionally updated; the training command
+also rejects equal file hashes, source IDs or record IDs across the split. Replace both with
+signed, snapshot-specific evidence before any real training decision.
 
 ## Repository decontamination
 

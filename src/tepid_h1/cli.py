@@ -78,6 +78,8 @@ def build_parser() -> argparse.ArgumentParser:
     training.add_argument("--checkpoint", type=Path)
     training.add_argument("--resume", action="store_true")
     training.add_argument("--corpus", type=Path)
+    training.add_argument("--validation-corpus", type=Path)
+    training.add_argument("--validation-steps", type=int, default=3)
     training.add_argument("--inventory", type=Path)
     training.add_argument("--report", type=Path)
     retrieval_generate = subparsers.add_parser(
@@ -276,14 +278,23 @@ def main() -> int:
             raise ValueError("--resume requires --checkpoint")
         if (args.corpus is None) != (args.inventory is None):
             raise ValueError("--corpus and --inventory must be provided together")
+        if args.validation_steps <= 0:
+            raise ValueError("validation-steps must be positive")
+        if args.validation_corpus is not None and args.corpus is None:
+            raise ValueError("--validation-corpus requires --corpus and --inventory")
 
         import torch
 
-        from .experiments import PairedExperimentConfig, load_governed_corpus
+        from .experiments import (
+            PairedExperimentConfig,
+            load_governed_corpus,
+            validate_governed_split_isolation,
+        )
         from .modeling import TepidH1CausalLM
         from .training import (
             WarmupCosineScheduler,
             causal_lm_train_step,
+            evaluate_causal_lm,
             load_checkpoint,
             save_checkpoint,
             validate_resume_contract,
@@ -337,6 +348,37 @@ def main() -> int:
             if args.corpus is not None
             else None
         )
+        validation_corpus = (
+            load_governed_corpus(
+                args.validation_corpus,
+                args.inventory,
+                PairedExperimentConfig(
+                    steps=args.validation_steps,
+                    batch_size=args.batch_size,
+                    sequence_length=args.sequence_length,
+                    learning_rate=args.learning_rate,
+                    seed=args.seed,
+                ),
+                vocab_size=config.vocab_size,
+            )
+            if args.validation_corpus is not None
+            else None
+        )
+        if governed_corpus is not None and validation_corpus is not None:
+            validate_governed_split_isolation(governed_corpus, validation_corpus)
+        validation_contract = (
+            {
+                "kind": "governed_fixed_token_corpus",
+                "corpus_file_sha256": validation_corpus.file_sha256,
+                "inventory_file_sha256": validation_corpus.inventory_file_sha256,
+                "inventory_id": validation_corpus.inventory_id,
+                "source_id": validation_corpus.source_id,
+                "steps": args.validation_steps,
+                "batch_sha256": validation_corpus.batch_sha256,
+            }
+            if validation_corpus is not None
+            else None
+        )
         data_contract = (
             {
                 "kind": "governed_fixed_token_corpus",
@@ -344,6 +386,7 @@ def main() -> int:
                 "inventory_file_sha256": governed_corpus.inventory_file_sha256,
                 "inventory_id": governed_corpus.inventory_id,
                 "source_id": governed_corpus.source_id,
+                "validation": validation_contract,
             }
             if governed_corpus is not None
             else {"kind": "deterministic_random_tokens"}
@@ -372,6 +415,11 @@ def main() -> int:
         if checkpoint_state is not None:
             validate_resume_contract(checkpoint_state.metadata, training_contract)
 
+        validation_before = (
+            evaluate_causal_lm(model, validation_corpus.batches)
+            if validation_corpus is not None
+            else None
+        )
         metrics = []
         for step_index in range(args.steps):
             input_ids = (
@@ -394,6 +442,11 @@ def main() -> int:
                 )
             )
             scheduler.step()
+        validation_after = (
+            evaluate_causal_lm(model, validation_corpus.batches)
+            if validation_corpus is not None
+            else None
+        )
         final_step = starting_step + args.steps
         if args.checkpoint is not None:
             save_checkpoint(
@@ -417,6 +470,24 @@ def main() -> int:
             "records": governed_corpus.records if governed_corpus is not None else None,
             "domains": list(governed_corpus.domains) if governed_corpus is not None else None,
         }
+        validation_report = (
+            {
+                **validation_contract,
+                "records": validation_corpus.records,
+                "domains": list(validation_corpus.domains),
+                "before": asdict(validation_before),
+                "after": asdict(validation_after),
+                "loss_change": validation_after.loss - validation_before.loss,
+                "perplexity_change": (
+                    validation_after.perplexity - validation_before.perplexity
+                ),
+            }
+            if validation_corpus is not None
+            and validation_contract is not None
+            and validation_before is not None
+            and validation_after is not None
+            else None
+        )
         _write_payload(
             {
                 "schema_version": 1,
@@ -426,6 +497,7 @@ def main() -> int:
                 "starting_step": starting_step,
                 "final_step": final_step,
                 "metrics": metrics,
+                "validation": validation_report,
                 "scheduler_state": scheduler.state_dict(),
                 "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             },

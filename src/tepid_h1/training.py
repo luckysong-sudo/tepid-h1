@@ -30,6 +30,14 @@ class TrainStepMetrics:
 
 
 @dataclass(frozen=True)
+class EvaluationMetrics:
+    loss: float
+    perplexity: float
+    evaluated_tokens: int
+    batches: int
+
+
+@dataclass(frozen=True)
 class CheckpointState:
     step: int
     metadata: Mapping[str, Any]
@@ -156,6 +164,39 @@ def causal_lm_train_step(
         gradient_norm=float(gradient_norm.detach()),
         trained_tokens=trained_tokens,
         learning_rate=learning_rate,
+    )
+
+
+def evaluate_causal_lm(
+    model: TrainableCausalLM,
+    batches: tuple[Tensor, ...],
+) -> EvaluationMetrics:
+    if not batches:
+        raise ValueError("evaluation requires at least one batch")
+    was_training = model.training
+    weighted_loss = 0.0
+    evaluated_tokens = 0
+    try:
+        model.eval()
+        with torch.no_grad():
+            for input_ids in batches:
+                output = model(input_ids, labels=input_ids)
+                if output.loss is None or not torch.isfinite(output.loss):
+                    raise NonFiniteTrainingError("evaluation loss is NaN or Inf")
+                batch_tokens = int(input_ids[:, 1:].numel())
+                weighted_loss += float(output.loss) * batch_tokens
+                evaluated_tokens += batch_tokens
+    finally:
+        model.train(was_training)
+    mean_loss = weighted_loss / evaluated_tokens
+    perplexity = math.exp(mean_loss)
+    if not math.isfinite(perplexity):
+        raise NonFiniteTrainingError("evaluation perplexity is NaN or Inf")
+    return EvaluationMetrics(
+        loss=mean_loss,
+        perplexity=perplexity,
+        evaluated_tokens=evaluated_tokens,
+        batches=len(batches),
     )
 
 

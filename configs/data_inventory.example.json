@@ -19,6 +19,22 @@
       "estimated_tokens": 72,
       "pii_status": "absent",
       "quality_status": "accepted"
+    },
+    {
+      "id": "synthetic-validation-v1",
+      "name": "Synthetic governed held-out validation fixture",
+      "uri": "repo://configs/validation_corpus.example.jsonl",
+      "snapshot": "v1",
+      "sha256": "6a69b14d8f3b39bddf2d3eb9d4cc4198d20ec9043ade8af2bf61fc8a8d07d753",
+      "license_id": "CC0-1.0",
+      "license_category": "public_domain",
+      "commercial_use": true,
+      "rights_evidence": "docs/M0_DATA_GOVERNANCE.md#synthetic-fixture",
+      "languages": ["zh", "en"],
+      "domains": ["synthetic", "code"],
+      "estimated_tokens": 36,
+      "pii_status": "absent",
+      "quality_status": "accepted"
     }
   ],
   "repository_decontamination": {

@@ -2,6 +2,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 try:
@@ -149,6 +150,51 @@ class PairedExperimentTests(unittest.TestCase):
         self.assertNotEqual(first.batch_sha256, resumed.batch_sha256)
         self.assertEqual(first.batches[0].tolist(), [[1, 2, 3, 4, 5]])
         self.assertEqual(resumed.batches[0].tolist(), [[7, 8, 9, 10, 11]])
+
+    def test_governed_training_and_validation_splits_are_isolated(self):
+        from tepid_h1.experiments import (
+            GovernedCorpus,
+            validate_governed_split_isolation,
+        )
+
+        shared = {
+            "batches": (torch.tensor([[1, 2, 3, 4]]),),
+            "batch_sha256": "c" * 64,
+            "start_step": 0,
+            "inventory_file_sha256": "d" * 64,
+            "inventory_id": "test-inventory",
+            "records": 1,
+            "domains": ("synthetic",),
+        }
+        training = GovernedCorpus(
+            **shared,
+            record_ids=("train-1",),
+            file_sha256="a" * 64,
+            source_id="training-source",
+        )
+        validation = GovernedCorpus(
+            **shared,
+            record_ids=("validation-1",),
+            file_sha256="b" * 64,
+            source_id="validation-source",
+        )
+
+        validate_governed_split_isolation(training, validation)
+        with self.assertRaisesRegex(ValueError, "files"):
+            validate_governed_split_isolation(
+                training,
+                replace(validation, file_sha256=training.file_sha256),
+            )
+        with self.assertRaisesRegex(ValueError, "source_id"):
+            validate_governed_split_isolation(
+                training,
+                replace(validation, source_id=training.source_id),
+            )
+        with self.assertRaisesRegex(ValueError, "overlap"):
+            validate_governed_split_isolation(
+                training,
+                replace(validation, record_ids=training.record_ids),
+            )
 
 
 def _write_governed_fixture(
