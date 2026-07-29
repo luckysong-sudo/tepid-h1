@@ -21,6 +21,7 @@ DASHBOARD_COMMIT_API = (
 DEV_MODE_API = f"https://huggingface.co/api/spaces/{SPACE_ID}/dev-mode"
 SPACE_INFO_API = f"https://huggingface.co/api/spaces/{SPACE_ID}"
 REMOTE_GATE_API = "/run_remote_quality_gate"
+PERFORMANCE_API = "/run_gpu_experiment"
 
 
 def required_environment(name: str) -> str:
@@ -168,6 +169,27 @@ def run_quality_gate(client: Client, report_path: Path) -> dict[str, Any]:
     return report
 
 
+def run_performance_benchmark(client: Client, report_path: Path) -> dict[str, Any]:
+    result = client.submit(
+        steps=5,
+        trials=3,
+        dtype="bfloat16",
+        api_name=PERFORMANCE_API,
+    ).result(timeout=720)
+    if not isinstance(result, (tuple, list)) or not result:
+        raise RuntimeError("remote performance benchmark returned an invalid response")
+    report = result[0]
+    if isinstance(report, str):
+        report = json.loads(report)
+    if not isinstance(report, dict):
+        raise RuntimeError("remote performance report is not a JSON object")
+    report_path.write_text(
+        f"{json.dumps(report, ensure_ascii=False, indent=2)}\n",
+        encoding="utf-8",
+    )
+    return report
+
+
 def append_summary(
     *,
     core_revision: str,
@@ -175,6 +197,7 @@ def append_summary(
     space_revision: str,
     runtime: dict[str, Any],
     report: dict[str, Any],
+    performance_report: dict[str, Any] | None,
 ) -> None:
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary_path:
@@ -192,6 +215,16 @@ def append_summary(
     ]
     if failed:
         lines.append(f"- Failed checks: `{', '.join(failed)}`")
+    if performance_report is not None:
+        paired = performance_report.get("aggregates", {}).get("paired", {})
+        ratio = paired.get("baseline_over_hybrid_tokens_per_second", {})
+        lines.extend(
+            [
+                f"- Performance benchmark: `5x3 BF16 completed`",
+                f"- Baseline/hybrid throughput ratio: `{ratio.get('geometric_mean')}`",
+                f"- Ratio 95% CI: `[{ratio.get('ci95_low')}, {ratio.get('ci95_high')}]`",
+            ]
+        )
     Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -200,6 +233,8 @@ def main() -> None:
     github_token = required_environment("GH_TOKEN")
     core_revision = required_environment("CORE_REVISION")
     report_path = Path(required_environment("QUALITY_REPORT_PATH"))
+    performance_report_path = Path(required_environment("PERFORMANCE_REPORT_PATH"))
+    run_performance = required_environment("RUN_PERFORMANCE_BENCHMARK").lower() == "true"
     if not re.fullmatch(r"[0-9a-f]{40}", core_revision):
         raise RuntimeError("CORE_REVISION must be a full Git commit SHA")
 
@@ -231,12 +266,16 @@ def main() -> None:
     runtime = refresh_dev_mode(hf_session, space_revision)
     client = wait_for_quality_api(hf_token)
     report = run_quality_gate(client, report_path)
+    performance_report = (
+        run_performance_benchmark(client, performance_report_path) if run_performance else None
+    )
     append_summary(
         core_revision=core_revision,
         dashboard_revision=dashboard_revision,
         space_revision=space_revision,
         runtime=runtime,
         report=report,
+        performance_report=performance_report,
     )
     if report.get("core_revision") != core_revision:
         raise RuntimeError("remote report core revision does not match deployed revision")
@@ -245,6 +284,10 @@ def main() -> None:
     if not report.get("passed"):
         failed = [check["name"] for check in report.get("checks", []) if not check.get("passed")]
         raise RuntimeError(f"remote ZeroGPU quality gate failed: {failed}")
+    if performance_report is not None:
+        deployed_revision = performance_report.get("deployment_adapter", {}).get("core_revision")
+        if deployed_revision != core_revision:
+            raise RuntimeError("performance report core revision does not match deployed revision")
 
 
 if __name__ == "__main__":

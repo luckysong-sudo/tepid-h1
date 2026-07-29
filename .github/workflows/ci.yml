@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_performance_benchmark:
+        description: Run the governed 5x3 BF16 paired benchmark after the quality gate
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -30,6 +36,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CORE_REVISION: ${{ github.sha }}
           QUALITY_REPORT_PATH: ${{ runner.temp }}/zero-gpu-quality-report.json
+          PERFORMANCE_REPORT_PATH: ${{ runner.temp }}/zero-gpu-performance-report.json
+          RUN_PERFORMANCE_BENCHMARK: >-
+            ${{ github.event_name == 'workflow_dispatch' &&
+                inputs.run_performance_benchmark || false }}
         run: python .github/scripts/deploy_zero_gpu.py
       - name: Upload remote quality report
         if: always()
@@ -38,4 +48,12 @@ jobs:
           name: zero-gpu-quality-report-${{ github.sha }}
           path: ${{ runner.temp }}/zero-gpu-quality-report.json
           if-no-files-found: warn
+          retention-days: 30
+      - name: Upload remote performance report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: zero-gpu-performance-report-${{ github.sha }}
+          path: ${{ runner.temp }}/zero-gpu-performance-report.json
+          if-no-files-found: ignore
           retention-days: 30

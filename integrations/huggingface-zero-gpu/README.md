@@ -49,3 +49,8 @@ dashboard revisions, uploads it using the repository `HF_TOKEN` secret, disables
 re-enables Dev Mode through the Hugging Face API, waits for the runtime revision to match,
 and invokes this endpoint with authenticated ZeroGPU quota. SSH is unavailable only during
 the refresh window and returns automatically when Dev Mode is restored.
+
+The GitHub workflow also exposes an opt-in `run_performance_benchmark` dispatch input.
+Enabling it runs the governed five-step, three-trial BF16 comparison after the quality
+gate and stores a separate GitHub artifact and Bucket report. Normal pushes do not consume
+the additional benchmark quota.
