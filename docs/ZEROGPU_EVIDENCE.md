@@ -66,3 +66,52 @@ The paired loss-change interval crosses zero, so this smoke provides no evidence
 quality difference. Three tiny trials remain far below a decision-grade model-quality
 experiment; their purpose is reproducible execution, variance reporting and early
 performance diagnosis.
+
+## 2026-07-29 post-optimization repeated BF16 smoke
+
+GitHub Actions run
+[`30451774560`](https://github.com/luckysong-sudo/tepid-h1/actions/runs/30451774560)
+deployed core revision `ad65470ff2dae84ca41f49d36997d48939a9587f`,
+refreshed Space Dev Mode without manual intervention, passed the 19-check remote
+quality gate, and then invoked the bounded performance endpoint. The quality gate
+included Ruff, 51 unit tests, data governance and decontamination, checkpoint resume,
+retrieval evaluation, Delta parity, a paired CUDA smoke, and the dashboard checks.
+
+The performance run used the same device class, configuration, governed corpus,
+batch digest, trial seeds and alternating execution order as the earlier repeated
+smoke:
+
+- Workload: five steps, three trials, batch size 1, sequence length 8
+- Tokens trained per model: 35 per trial, 105 total
+- Batch SHA-256:
+  `ac718cb1516251d37de74f5de6f8fa2d6aae9d8ba64e492819598a961a8a07ee`
+- Hybrid throughput: 132.737 tokens/second mean
+  (95% CI 88.356–177.119)
+- Baseline throughput: 285.106 tokens/second mean
+  (95% CI 256.383–313.829)
+- Baseline/hybrid throughput ratio: 2.216 geometric mean
+  (95% CI 1.690–2.905)
+- Hybrid loss change: +0.0272 mean (95% CI -0.0100–+0.0644)
+- Baseline loss change: -0.0616 mean (95% CI -0.1779–+0.0546)
+- Hybrid-minus-baseline loss-change difference: +0.0888 mean
+  (95% CI -0.0341–+0.2118)
+- Hybrid allocator peak: 19,345,920 bytes
+- Baseline allocator peak: 19,326,976 bytes
+- Persistent report:
+  `/data/reports/tepid-h1-75e6c989e3e74d01b3c7b366eeab49a6.json`
+  in `himartoffice/Tepid-H1-storage`
+
+Against the earlier repeated smoke, the hybrid mean throughput increased by 8.8% and
+the baseline/hybrid ratio decreased from 2.845 to 2.216, a 22.1% reduction in the
+observed relative throughput gap. This is useful directional evidence that the fused
+Delta path and native GQA work reduced the bottleneck, but it is not a statistically
+isolated optimization effect: the two benchmark runs were not interleaved with each
+other, their throughput confidence intervals overlap, and the baseline mean also moved
+by -15.6%. The hybrid path therefore remains about 2.2 times slower than the matched
+baseline under this tiny workload.
+
+The paired loss-change interval again crosses zero. The architecture changed between
+the pre- and post-optimization revisions, so cross-revision loss values are not a
+model-quality comparison. Larger target-hardware measurements and optimized
+attention, Delta and MoE kernels remain required before making scaling or quality
+claims.
