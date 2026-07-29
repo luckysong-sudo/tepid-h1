@@ -41,6 +41,8 @@ jobs:
           tepid-h1 compare-smoke
           --steps 1
           --trials 2
+          --device cpu
+          --dtype float32
           --corpus configs/paired_corpus.example.jsonl
           --inventory configs/data_inventory.example.json
           --report /tmp/paired-governed.json

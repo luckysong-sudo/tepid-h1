@@ -116,6 +116,12 @@ def build_parser() -> argparse.ArgumentParser:
     comparison.add_argument("--learning-rate", type=float, default=1e-3)
     comparison.add_argument("--max-gradient-norm", type=float, default=1.0)
     comparison.add_argument("--seed", type=int, default=37)
+    comparison.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    comparison.add_argument(
+        "--dtype",
+        choices=("float32", "bfloat16", "float16"),
+        default="float32",
+    )
     comparison.add_argument("--corpus", type=Path)
     comparison.add_argument("--inventory", type=Path)
     comparison.add_argument("--report", type=Path)
@@ -342,6 +348,8 @@ def main() -> int:
             learning_rate=args.learning_rate,
             max_gradient_norm=args.max_gradient_norm,
             seed=args.seed,
+            device=args.device,
+            dtype=args.dtype,
         )
         corpus = (
             load_governed_corpus(

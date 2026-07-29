@@ -27,6 +27,9 @@ class PairedExperimentTests(unittest.TestCase):
         self.assertTrue(report["parameters"]["baseline"]["estimate_matches_actual"])
         self.assertGreater(trial["hybrid"]["tokens_per_second"], 0)
         self.assertGreater(trial["baseline"]["tokens_per_second"], 0)
+        self.assertEqual(report["environment"]["device_type"], "cpu")
+        self.assertEqual(report["environment"]["dtype"], "float32")
+        self.assertIsNone(trial["hybrid"]["peak_memory_bytes"])
 
     def test_same_seed_reproduces_data_and_loss(self):
         from tepid_h1.experiments import PairedExperimentConfig, run_paired_smoke
@@ -54,6 +57,20 @@ class PairedExperimentTests(unittest.TestCase):
             PairedExperimentConfig(sequence_length=1)
         with self.assertRaisesRegex(ValueError, "trials"):
             PairedExperimentConfig(trials=0)
+        with self.assertRaisesRegex(ValueError, "device"):
+            PairedExperimentConfig(device="metal")
+        with self.assertRaisesRegex(ValueError, "CPU"):
+            PairedExperimentConfig(device="cpu", dtype="float16")
+
+    def test_unavailable_cuda_fails_closed(self):
+        from tepid_h1.experiments import PairedExperimentConfig, run_paired_smoke
+
+        if torch.cuda.is_available():
+            self.skipTest("CUDA is available in this test environment")
+        with self.assertRaisesRegex(RuntimeError, "CUDA"):
+            run_paired_smoke(
+                PairedExperimentConfig(steps=1, sequence_length=4, device="cuda")
+            )
 
     def test_governed_corpus_binds_inventory_and_reports_uncertainty(self):
         from tepid_h1.experiments import (

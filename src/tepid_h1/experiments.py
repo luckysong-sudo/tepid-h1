@@ -35,6 +35,8 @@ class PairedExperimentConfig:
     learning_rate: float = 1e-3
     max_gradient_norm: float = 1.0
     seed: int = 37
+    device: str = "cpu"
+    dtype: str = "float32"
 
     def __post_init__(self) -> None:
         if self.steps <= 0 or self.batch_size <= 0:
@@ -47,6 +49,12 @@ class PairedExperimentConfig:
             raise ValueError("learning_rate must be positive")
         if self.max_gradient_norm <= 0:
             raise ValueError("max_gradient_norm must be positive")
+        if self.device not in {"cpu", "cuda"}:
+            raise ValueError("device must be 'cpu' or 'cuda'")
+        if self.dtype not in {"float32", "bfloat16", "float16"}:
+            raise ValueError("dtype must be float32, bfloat16 or float16")
+        if self.device == "cpu" and self.dtype != "float32":
+            raise ValueError("CPU paired experiments currently require float32")
 
 
 @dataclass(frozen=True)
@@ -135,15 +143,23 @@ def run_paired_smoke(
 ) -> dict[str, Any]:
     model_config = TepidH1Config.smoke()
     baseline_config = TransformerBaselineConfig.active_parameter_matched(model_config)
-    batches = corpus.batches if corpus is not None else _generate_batches(config, model_config.vocab_size)
+    batches = (
+        corpus.batches
+        if corpus is not None
+        else _generate_batches(config, model_config.vocab_size)
+    )
+    device, dtype = _resolve_execution(config)
+    execution_batches = tuple(batch.to(device=device) for batch in batches)
 
     trials = [
         _run_trial(
             config,
-            batches,
+            execution_batches,
             model_config=model_config,
             baseline_config=baseline_config,
             trial_index=trial_index,
+            device=device,
+            dtype=dtype,
         )
         for trial_index in range(config.trials)
     ]
@@ -182,12 +198,7 @@ def run_paired_smoke(
             else "Engineering comparability smoke only; random-token loss and host timing "
             "are not model-quality or production-performance evidence."
         ),
-        "environment": {
-            "python": platform.python_version(),
-            "torch": torch.__version__,
-            "device": "cpu",
-            "torch_threads": torch.get_num_threads(),
-        },
+        "environment": _environment_report(device, dtype),
         "config": asdict(config),
         "data": data,
         "trials": trials,
@@ -294,12 +305,18 @@ def _run_trial(
     model_config: TepidH1Config,
     baseline_config: TransformerBaselineConfig,
     trial_index: int,
+    device: torch.device,
+    dtype: torch.dtype,
 ) -> dict[str, Any]:
     trial_seed = config.seed + trial_index
     torch.manual_seed(trial_seed)
-    hybrid = TepidH1CausalLM(model_config)
+    if device.type == "cuda":
+        torch.cuda.manual_seed_all(trial_seed)
+    hybrid = TepidH1CausalLM(model_config).to(device=device, dtype=dtype)
     torch.manual_seed(trial_seed)
-    baseline = TransformerBaselineCausalLM(baseline_config)
+    if device.type == "cuda":
+        torch.cuda.manual_seed_all(trial_seed)
+    baseline = TransformerBaselineCausalLM(baseline_config).to(device=device, dtype=dtype)
     optimizers = {
         "hybrid": torch.optim.AdamW(hybrid.parameters(), lr=config.learning_rate),
         "baseline": torch.optim.AdamW(baseline.parameters(), lr=config.learning_rate),
@@ -317,6 +334,9 @@ def _run_trial(
         order = ["hybrid", "baseline"] if order_offset % 2 == 0 else ["baseline", "hybrid"]
         execution_order.append(order)
         for name in order:
+            if device.type == "cuda":
+                torch.cuda.reset_peak_memory_stats(device)
+                torch.cuda.synchronize(device)
             started = time.perf_counter()
             metrics = causal_lm_train_step(
                 models[name],
@@ -324,8 +344,19 @@ def _run_trial(
                 optimizers[name],
                 max_gradient_norm=config.max_gradient_norm,
             )
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
             elapsed = time.perf_counter() - started
-            measurements[name].append({**asdict(metrics), "elapsed_seconds": elapsed})
+            peak_memory = (
+                torch.cuda.max_memory_allocated(device) if device.type == "cuda" else None
+            )
+            measurements[name].append(
+                {
+                    **asdict(metrics),
+                    "elapsed_seconds": elapsed,
+                    "peak_memory_bytes": peak_memory,
+                }
+            )
 
     hybrid_estimate = hybrid_parameter_estimate(model_config)
     baseline_estimate = baseline_parameter_estimate(baseline_config)
@@ -380,7 +411,7 @@ def _parameter_count(model: TrainableCausalLM) -> int:
 
 
 def _summarize(
-    measurements: list[dict[str, float | int]],
+    measurements: list[dict[str, Any]],
     *,
     actual_parameters: int,
     estimated_physical_parameters: int,
@@ -388,6 +419,11 @@ def _summarize(
     elapsed = sum(float(item["elapsed_seconds"]) for item in measurements)
     trained_tokens = sum(int(item["trained_tokens"]) for item in measurements)
     losses = [float(item["loss"]) for item in measurements]
+    peak_memory_values = [
+        int(item["peak_memory_bytes"])
+        for item in measurements
+        if item["peak_memory_bytes"] is not None
+    ]
     return {
         "actual_parameters": actual_parameters,
         "parameter_estimate_matches_actual": actual_parameters == estimated_physical_parameters,
@@ -397,12 +433,13 @@ def _summarize(
         "initial_loss": losses[0],
         "final_loss": losses[-1],
         "loss_change": losses[-1] - losses[0],
+        "peak_memory_bytes": max(peak_memory_values) if peak_memory_values else None,
         "steps": measurements,
     }
 
 
 def _aggregate_model(summaries: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
+    result = {
         "trials": len(summaries),
         "trained_tokens_per_trial": int(summaries[0]["trained_tokens"]),
         "tokens_per_second": _summary_statistics(
@@ -418,6 +455,15 @@ def _aggregate_model(summaries: list[dict[str, Any]]) -> dict[str, Any]:
             [float(summary["loss_change"]) for summary in summaries]
         ),
     }
+    peak_memory_values = [
+        float(summary["peak_memory_bytes"])
+        for summary in summaries
+        if summary["peak_memory_bytes"] is not None
+    ]
+    result["peak_memory_bytes"] = (
+        _summary_statistics(peak_memory_values) if peak_memory_values else None
+    )
+    return result
 
 
 def _summary_statistics(values: list[float]) -> dict[str, float | int]:
@@ -447,3 +493,46 @@ def _ratio_statistics(values: list[float]) -> dict[str, float | int]:
         "ci95_low": math.exp(log_mean - log_margin),
         "ci95_high": math.exp(log_mean + log_margin),
     }
+
+
+def _resolve_execution(
+    config: PairedExperimentConfig,
+) -> tuple[torch.device, torch.dtype]:
+    if config.device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is not available")
+    if (
+        config.device == "cuda"
+        and config.dtype == "bfloat16"
+        and not torch.cuda.is_bf16_supported()
+    ):
+        raise RuntimeError("bfloat16 was requested but the CUDA device does not support it")
+    dtype = {
+        "float32": torch.float32,
+        "bfloat16": torch.bfloat16,
+        "float16": torch.float16,
+    }[config.dtype]
+    return torch.device(config.device), dtype
+
+
+def _environment_report(device: torch.device, dtype: torch.dtype) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "python": platform.python_version(),
+        "torch": torch.__version__,
+        "device_type": device.type,
+        "dtype": str(dtype).removeprefix("torch."),
+        "torch_threads": torch.get_num_threads(),
+        "cuda_available": torch.cuda.is_available(),
+        "timing_scope": "synchronized train step; data batches are preloaded on device",
+    }
+    if device.type == "cuda":
+        properties = torch.cuda.get_device_properties(device)
+        report.update(
+            {
+                "device_name": properties.name,
+                "device_capability": list(torch.cuda.get_device_capability(device)),
+                "total_memory_bytes": properties.total_memory,
+                "cuda_runtime": torch.version.cuda,
+                "bf16_supported": torch.cuda.is_bf16_supported(),
+            }
+        )
+    return report

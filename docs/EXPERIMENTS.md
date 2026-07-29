@@ -15,6 +15,8 @@ tepid-h1 compare-smoke \
   --sequence-length 8 \
   --learning-rate 0.001 \
   --seed 37 \
+  --device cpu \
+  --dtype float32 \
   --corpus configs/paired_corpus.example.jsonl \
   --inventory configs/data_inventory.example.json \
   --report artifacts/paired-governed.json
@@ -56,3 +58,4 @@ uses tiny CPU models. Its losses do not measure language quality, its normal 95%
 are descriptive for small trial counts, and host timings do not predict accelerator
 performance. A decision-grade ablation still requires representative governed text, a
 selected tokenizer, declared warmup and measurement windows, and target-hardware profiling.
+The explicit CUDA execution contract is documented in `docs/ACCELERATOR.md`.
