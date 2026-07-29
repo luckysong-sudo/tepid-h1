@@ -15,6 +15,7 @@ Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**�
 - 自回归损失、有限值检查、梯度裁剪与可恢复 checkpoint 的最小训练闭环；
 - 答案隔离、精确长度的 8K/32K 检索生成与分维度评分套件；
 - 全 GQA＋Dense SwiGLU 的激活参数匹配 Transformer 对照基线；
+- 同数据顺序、同 token 预算和同优化器的混合/基线配对训练报告；
 - 外置 Agent Runtime、Policy、Tool、Verifier 协议；
 - M0—M5 阶段门配置和标准库测试。
 - 可失败关闭的数据资产清单审计、去污染检测与 64K/80K/96K Tokenizer 对比工具。
@@ -45,7 +46,7 @@ pytest
 ```
 
 持续集成会在每次推送和 Pull Request 上安装 CPU 参考环境，执行 Ruff 与完整的
-32 项配置、数据治理、训练、检索、Transformer 基线、Runtime 与分块一致性测试。
+35 项配置、数据治理、训练、检索、配对基线、Runtime 与分块一致性测试。
 
 M0 数据资产审计：
 

@@ -105,6 +105,17 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("smoke", "prototype", "reference"),
         default="prototype",
     )
+    comparison = subparsers.add_parser(
+        "compare-smoke",
+        help="train hybrid and matched baseline on identical random-token batches",
+    )
+    comparison.add_argument("--steps", type=int, default=2)
+    comparison.add_argument("--batch-size", type=int, default=1)
+    comparison.add_argument("--sequence-length", type=int, default=8)
+    comparison.add_argument("--learning-rate", type=float, default=1e-3)
+    comparison.add_argument("--max-gradient-norm", type=float, default=1.0)
+    comparison.add_argument("--seed", type=int, default=37)
+    comparison.add_argument("--report", type=Path)
     return parser
 
 
@@ -310,6 +321,22 @@ def main() -> int:
             "reference": TepidH1Config.reference_28b_a7b,
         }
         _write_payload(comparison_report(variants[args.variant]()), None)
+        return 0
+    if args.command == "compare-smoke":
+        from .experiments import PairedExperimentConfig, run_paired_smoke
+
+        payload = run_paired_smoke(
+            PairedExperimentConfig(
+                steps=args.steps,
+                batch_size=args.batch_size,
+                sequence_length=args.sequence_length,
+                learning_rate=args.learning_rate,
+                max_gradient_norm=args.max_gradient_norm,
+                seed=args.seed,
+            )
+        )
+        payload["generated_at"] = datetime.now(timezone.utc).isoformat()
+        _write_payload(payload, args.report)
         return 0
     raise AssertionError(f"unsupported command: {args.command}")
 
