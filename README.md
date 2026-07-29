@@ -19,6 +19,7 @@ Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**�
 - 显式 CPU/CUDA 与精度契约、CUDA 同步计时和峰值显存记录；
 - Delta 候选后端的前向、状态、梯度、分块一致性与目标设备加速资格门；
 - 有界输入、固定核心版本和治理语料校验的 Hugging Face ZeroGPU Space 包；
+- 已验证的 ZeroGPU BF16、报告下载与 Bucket 持久化执行证据；
 - 外置 Agent Runtime、Policy、Tool、Verifier 协议；
 - M0—M5 阶段门配置和标准库测试。
 - 可失败关闭的数据资产清单审计、去污染检测与 64K/80K/96K Tokenizer 对比工具。

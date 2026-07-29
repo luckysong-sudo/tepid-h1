@@ -56,3 +56,6 @@ requires a conventional CUDA runner until an ahead-of-time compiled candidate is
 The current smoke configuration is intentionally tiny. A successful CUDA report proves
 device compatibility and measurement plumbing only; it is not the M1 350M target-hardware
 benchmark.
+
+The first verified ZeroGPU BF16 execution and its explicit limitations are recorded in
+`docs/ZEROGPU_EVIDENCE.md`.
