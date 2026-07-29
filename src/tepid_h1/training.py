@@ -39,7 +39,7 @@ def validate_resume_contract(
 ) -> None:
     saved_contract = checkpoint_metadata.get("training_contract")
     if not isinstance(saved_contract, Mapping):
-        raise ValueError("checkpoint does not contain a training contract")
+        raise TypeError("checkpoint does not contain a training contract")
     if dict(saved_contract) != dict(expected_contract):
         raise ValueError("checkpoint training contract does not match the current run")
 
