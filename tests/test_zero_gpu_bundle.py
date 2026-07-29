@@ -16,7 +16,9 @@ class ZeroGPUBundleTests(unittest.TestCase):
         match = re.search(r"tepid-h1.+@([0-9a-f]{40})", requirements)
         self.assertIsNotNone(match)
         self.assertIn("sdk: gradio", (BUNDLE / "README.md").read_text(encoding="utf-8"))
-        self.assertIn("/data/reports", (BUNDLE / "app.py").read_text(encoding="utf-8"))
+        app_source = (BUNDLE / "app.py").read_text(encoding="utf-8")
+        self.assertIn("/data/reports", app_source)
+        self.assertIn('allowed_paths=["/data/reports"]', app_source)
 
     def test_bundled_corpus_matches_inventory_digest(self):
         corpus = (BUNDLE / "paired_corpus.jsonl").read_bytes()

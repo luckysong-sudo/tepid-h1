@@ -80,4 +80,4 @@ with gr.Blocks(title="Tepid-H1 ZeroGPU Qualification") as demo:
 
 
 if __name__ == "__main__":
-    demo.queue(max_size=8).launch()
+    demo.queue(max_size=8).launch(allowed_paths=["/data/reports"])
