@@ -44,5 +44,8 @@ a bounded JSON report under `/data/reports`. The same allocation also clones the
 `tepid-h1-progress` revision and runs its dependency and Node quality checks.
 
 Project hosts only edit and synchronize source code. They do not execute the test suite.
-GitHub Actions records this remote-only policy without duplicating compute on a hosted
-runner.
+On each core `main` push, GitHub Actions prepares the Space bundle with immutable core and
+dashboard revisions, uploads it using the repository `HF_TOKEN` secret, disables and
+re-enables Dev Mode through the Hugging Face API, waits for the runtime revision to match,
+and invokes this endpoint with authenticated ZeroGPU quota. SSH is unavailable only during
+the refresh window and returns automatically when Dev Mode is restored.
