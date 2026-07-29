@@ -154,6 +154,48 @@ class GatedDeltaMemoryReference(nn.Module):
         return self.out_proj(mixed), state
 
 
+class GatedDeltaMemoryEager(GatedDeltaMemoryReference):
+    """Algebraically fused eager Delta path with the reference state-dict layout."""
+
+    def forward(self, x: Tensor, state: Tensor | None = None) -> tuple[Tensor, Tensor]:
+        batch_size, sequence_length, hidden_size = x.shape
+        projected = self.in_proj(x).view(
+            batch_size,
+            sequence_length,
+            self.num_heads,
+            6,
+            self.head_dim,
+        )
+        q, k, v, raw_decay, raw_erase, raw_write = projected.unbind(dim=3)
+        q = F.normalize(q, dim=-1)
+        k = F.normalize(k, dim=-1)
+        decay = torch.exp(-F.softplus(raw_decay))
+        erase = torch.sigmoid(raw_erase)
+        write = torch.sigmoid(raw_write)
+
+        if state is None:
+            state = self.initial_state(batch_size, device=x.device, dtype=x.dtype)
+        expected = (batch_size, self.num_heads, self.head_dim, self.head_dim)
+        if tuple(state.shape) != expected:
+            raise ValueError(f"delta state shape must be {expected}, got {tuple(state.shape)}")
+
+        outputs: list[Tensor] = []
+        for step in range(sequence_length):
+            key = k[:, step]
+            decayed_state = decay[:, step].unsqueeze(-1) * state
+            old_value = torch.matmul(
+                (erase[:, step] * key).unsqueeze(-2),
+                decayed_state,
+            ).squeeze(-2)
+            correction = write[:, step] * v[:, step] - old_value
+            state = decayed_state + key.unsqueeze(-1) * correction.unsqueeze(-2)
+            output = torch.matmul(q[:, step].unsqueeze(-2), state).squeeze(-2)
+            outputs.append(output)
+
+        mixed = torch.stack(outputs, dim=1).reshape(batch_size, sequence_length, hidden_size)
+        return self.out_proj(mixed), state
+
+
 class GQAAttentionReference(nn.Module):
     def __init__(self, config: TepidH1Config, *, local_window: int | None) -> None:
         super().__init__()

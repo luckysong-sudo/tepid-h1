@@ -24,6 +24,10 @@ An optimized backend may replace it only when:
 
 `tepid-h1 delta-validate` turns the first, second, third and fifth conditions into a
 machine-readable qualification report for Delta candidates. See `docs/DELTA_BACKEND.md`.
+The model currently uses `GatedDeltaMemoryEager`, which preserves the reference parameter
+and state layout while replacing three per-token `einsum` calls with two batched matrix
+reads and one fused erase/write rank-one update. `GatedDeltaMemoryReference` remains the
+correctness oracle.
 
 ## Delta state convention
 

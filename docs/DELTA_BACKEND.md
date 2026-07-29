@@ -41,6 +41,9 @@ target-device label is explicitly declared, and measured candidate throughput ex
 reference. CPU or eager runs can validate the compiler boundary but cannot claim an
 optimized backend.
 
-The current candidate compiles the correctness reference. It is scaffolding for a future
-Triton or custom CUDA implementation, not a claim that the Python recurrence has already
-become a production kernel.
+The current candidate compiles `GatedDeltaMemoryEager`, while
+`GatedDeltaMemoryReference` remains the independent oracle. The eager candidate preserves
+the same state-dict and recurrent-state layouts, uses batched matrix reads, and combines
+erase and write into one algebraically equivalent rank-one update. It is a portable
+optimization and an intermediate target for future Triton or custom CUDA work, not a
+claim that the Python recurrence is already a production kernel.

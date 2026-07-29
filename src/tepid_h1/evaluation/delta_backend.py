@@ -9,7 +9,7 @@ import torch
 from torch import Tensor, nn
 
 from ..config import TepidH1Config
-from ..modeling.layers import GatedDeltaMemoryReference
+from ..modeling.layers import GatedDeltaMemoryEager, GatedDeltaMemoryReference
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ def validate_delta_backend(config: DeltaBackendValidationConfig) -> dict[str, An
 
     torch.manual_seed(config.seed)
     reference = GatedDeltaMemoryReference(model_config).to(device=device, dtype=dtype)
-    candidate_layer = GatedDeltaMemoryReference(model_config).to(device=device, dtype=dtype)
+    candidate_layer = GatedDeltaMemoryEager(model_config).to(device=device, dtype=dtype)
     candidate_layer.load_state_dict(reference.state_dict())
     candidate = torch.compile(candidate_layer, backend=config.backend, fullgraph=True)
 
@@ -136,6 +136,10 @@ def validate_delta_backend(config: DeltaBackendValidationConfig) -> dict[str, An
         "schema_version": 1,
         "experiment": "delta_backend_qualification",
         "config": asdict(config),
+        "implementations": {
+            "reference": "GatedDeltaMemoryReference",
+            "candidate": "GatedDeltaMemoryEager",
+        },
         "environment": _environment(device, dtype),
         "tolerance": tolerance,
         "comparisons": comparisons,

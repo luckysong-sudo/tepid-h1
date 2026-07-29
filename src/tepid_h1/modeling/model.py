@@ -10,7 +10,7 @@ from tepid_h1.config import ChannelMixer, SequenceMixer, TepidH1Config
 
 from .layers import (
     AttentionState,
-    GatedDeltaMemoryReference,
+    GatedDeltaMemoryEager,
     GlobalSparseAttentionReference,
     GQAAttentionReference,
     RMSNorm,
@@ -44,7 +44,7 @@ class TepidH1Block(nn.Module):
         self.beta = nn.Parameter(torch.full((), 0.1))
 
         if sequence is SequenceMixer.DELTA:
-            self.sequence_mixer: nn.Module = GatedDeltaMemoryReference(config)
+            self.sequence_mixer: nn.Module = GatedDeltaMemoryEager(config)
         elif sequence is SequenceMixer.LOCAL_ATTENTION:
             self.sequence_mixer = GQAAttentionReference(config, local_window=config.local_window)
         else:

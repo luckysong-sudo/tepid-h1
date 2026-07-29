@@ -24,6 +24,7 @@ class DeltaBackendValidationTests(unittest.TestCase):
         )
 
         self.assertTrue(report["numerical_passed"])
+        self.assertEqual(report["implementations"]["candidate"], "GatedDeltaMemoryEager")
         self.assertTrue(all(item["passed"] for item in report["comparisons"].values()))
         self.assertFalse(report["qualification"]["target_hardware_evidence"])
         self.assertFalse(report["qualification"]["optimization_qualified"])

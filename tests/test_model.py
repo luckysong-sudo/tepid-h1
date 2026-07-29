@@ -44,6 +44,50 @@ class ModelTests(unittest.TestCase):
         torch.testing.assert_close(chunked_output, full_output, rtol=1e-5, atol=1e-6)
         torch.testing.assert_close(chunked_state, full_state, rtol=1e-5, atol=1e-6)
 
+    def test_eager_delta_matches_reference_forward_state_and_gradients(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GatedDeltaMemoryEager, GatedDeltaMemoryReference
+
+        torch.manual_seed(9)
+        config = TepidH1Config.smoke()
+        reference = GatedDeltaMemoryReference(config)
+        candidate = GatedDeltaMemoryEager(config)
+        candidate.load_state_dict(reference.state_dict())
+        reference_input = torch.randn(2, 5, config.hidden_size, requires_grad=True)
+        candidate_input = reference_input.detach().clone().requires_grad_(True)
+        reference_state = reference.initial_state(
+            2,
+            device=reference_input.device,
+            dtype=reference_input.dtype,
+        ).requires_grad_(True)
+        candidate_state = reference_state.detach().clone().requires_grad_(True)
+
+        reference_output, reference_final_state = reference(reference_input, reference_state)
+        candidate_output, candidate_final_state = candidate(candidate_input, candidate_state)
+        (reference_output.square().mean() + reference_final_state.square().mean()).backward()
+        (candidate_output.square().mean() + candidate_final_state.square().mean()).backward()
+
+        torch.testing.assert_close(candidate_output, reference_output, rtol=1e-5, atol=1e-6)
+        torch.testing.assert_close(
+            candidate_final_state,
+            reference_final_state,
+            rtol=1e-5,
+            atol=1e-6,
+        )
+        torch.testing.assert_close(candidate_input.grad, reference_input.grad, rtol=1e-5, atol=1e-6)
+        torch.testing.assert_close(candidate_state.grad, reference_state.grad, rtol=1e-5, atol=1e-6)
+        for candidate_parameter, reference_parameter in zip(
+            candidate.parameters(),
+            reference.parameters(),
+            strict=True,
+        ):
+            torch.testing.assert_close(
+                candidate_parameter.grad,
+                reference_parameter.grad,
+                rtol=1e-5,
+                atol=1e-6,
+            )
+
     def test_model_chunked_forward_matches_single_pass(self):
         from tepid_h1.config import TepidH1Config
         from tepid_h1.modeling import TepidH1CausalLM
