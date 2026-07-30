@@ -21,9 +21,9 @@ Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**�
 - Delta 候选后端的前向、状态、梯度、分块一致性与目标设备加速资格门；
 - 有界输入、固定核心版本和治理语料校验的 Hugging Face ZeroGPU Space 包；
 - 已验证的 ZeroGPU BF16、报告下载与 Bucket 持久化执行证据；
-- 外置 Agent Runtime、Policy、Tool、Verifier 协议；
+- 外置 Agent Runtime、Policy、Tool、Verifier 协议与可复用参考实现；
 - M0—M5 阶段门配置和标准库测试。
-- 可失败关闭的数据资产清单审计、去污染检测与 64K/80K/96K Tokenizer 对比工具。
+- 可失败关闭的数据资产清单审计、去污染检测、64K/80K/96K Tokenizer 对比与语料统计工具。
 
 ## 明确限制
 
@@ -70,10 +70,11 @@ PYTHONPATH=src python -m tepid_h1.cli data-audit configs/data_inventory.example.
 src/tepid_h1/
   config.py             模型配置与宏块计划
   modeling/             正确性参考模型
-  agent/                外置 Agent Runtime 协议与执行循环
+  agent/                外置 Agent Runtime 协议、执行循环与参考实现
+  data/                 数据治理、去污染、Tokenizer 对比与语料统计
 configs/
   stage_gates.json      分阶段验收门
 docs/
   ARCHITECTURE.md       实现边界与后端替换约定
-tests/                  配置、Runtime 与模型烟雾测试
+tests/                  配置、Runtime、模型与数据工具测试
 ```

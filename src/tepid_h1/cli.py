@@ -14,8 +14,10 @@ from .data import (
     compare_corpora,
     load_corpus,
     load_inventory,
+    load_paired_corpus_records,
     load_text_records,
     select_candidate,
+    summarize_paired_corpus,
 )
 from .data.decontamination import file_sha256
 from .data.tokenizer_benchmark import corpus_digest
@@ -155,6 +157,12 @@ def build_parser() -> argparse.ArgumentParser:
     comparison.add_argument("--corpus", type=Path)
     comparison.add_argument("--inventory", type=Path)
     comparison.add_argument("--report", type=Path)
+    corpus_stats = subparsers.add_parser(
+        "corpus-stats",
+        help="summarize a governed paired-corpus JSONL file",
+    )
+    corpus_stats.add_argument("corpus", type=Path)
+    corpus_stats.add_argument("--report", type=Path)
     return parser
 
 
@@ -603,6 +611,16 @@ def main() -> int:
         payload["generated_at"] = datetime.now(timezone.utc).isoformat()
         _write_payload(payload, args.report)
         return 0
+    if args.command == "corpus-stats":
+        stats = summarize_paired_corpus(args.corpus)
+        payload = {
+            "schema_version": 1,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "corpus_file_sha256": file_sha256(args.corpus),
+            **stats.to_dict(),
+        }
+        _write_payload(payload, args.report)
+        return 0 if not stats.duplicate_record_ids else 6
     raise AssertionError(f"unsupported command: {args.command}")
 
 

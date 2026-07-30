@@ -74,3 +74,12 @@ parameter gradients.
 The model emits only `ToolCall` or `FinalAnswer`. Credentials, permissions, execution,
 long-term memory and completion verification remain outside model weights. A final answer
 is returned only after the Verifier accepts it.
+
+`tepid_h1.agent.defaults` provides reusable reference implementations of every runtime
+protocol: `StateContextBuilder`, `AllowlistPolicy`, `ToolRegistry`, `EvidenceVerifier` and
+`ListTelemetry`. `AllowlistPolicy` is fail-closed by default (an empty allowlist denies
+every call). `ToolRegistry` converts handler exceptions into `ToolResult` with `ok=False`
+so a tool failure never crashes the loop. `EvidenceVerifier` binds a final answer to its
+supporting successful tool results. `ListTelemetry` records a serializable event trace for
+audit. These defaults are optional; callers may still provide custom protocol
+implementations.

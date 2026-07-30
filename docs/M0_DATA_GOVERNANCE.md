@@ -77,3 +77,18 @@ bytes/token and characters/token, and measures both tokens/second and input UTF-
 Ranking uses 70% domain-balanced compression and 30% input-byte throughput, avoiding a bias
 against candidates that emit fewer tokens. The resulting selection remains provisional until
 corpus licensing and representativeness are reviewed.
+
+## Paired-corpus statistics
+
+The governed paired-corpus fixtures store pre-tokenized JSONL records with `id`,
+`source_id`, `domain` and `token_ids` fields. A summary command reports record counts,
+source/domain breakdowns, sequence-length statistics, unique token counts, token-id range
+and duplicate record IDs:
+
+```bash
+PYTHONPATH=src python -m tepid_h1.cli corpus-stats configs/paired_corpus.example.jsonl
+```
+
+The command binds the report to the corpus file SHA-256 and exits with code `6` when
+duplicate record IDs are detected, so it can gate corpus pull requests alongside the data
+audit.
