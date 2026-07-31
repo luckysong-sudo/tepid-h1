@@ -111,3 +111,60 @@ def summarize_paired_corpus(path: str | Path) -> CorpusStats:
         token_id_max=token_max if token_max is not None else 0,
         duplicate_record_ids=duplicates,
     )
+
+
+@dataclass(frozen=True)
+class SplitIsolationReport:
+    """Result of checking that two paired corpora form an isolated split."""
+
+    clean: bool
+    training_file_sha256: str
+    validation_file_sha256: str
+    training_source_ids: tuple[str, ...]
+    validation_source_ids: tuple[str, ...]
+    shared_source_ids: tuple[str, ...]
+    shared_record_ids: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def check_paired_corpus_isolation(
+    training_path: str | Path,
+    validation_path: str | Path,
+) -> SplitIsolationReport:
+    """Check that two paired-corpus files form an isolated train/validation split.
+
+    This is a pure-data check that does not require PyTorch. It verifies that the
+    two files have different SHA-256 digests, disjoint source IDs and disjoint
+    record IDs. The governed training path in ``experiments.py`` performs the
+    same checks on loaded ``GovernedCorpus`` objects; this function makes the
+    check available as a standalone data-governance tool.
+    """
+    from .decontamination import file_sha256
+
+    training_records = load_paired_corpus_records(training_path)
+    validation_records = load_paired_corpus_records(validation_path)
+
+    training_sha = file_sha256(training_path)
+    validation_sha = file_sha256(validation_path)
+    if training_sha == validation_sha:
+        raise ValueError("training and validation corpus files must be different")
+
+    training_source_ids = {str(record["source_id"]) for record in training_records}
+    validation_source_ids = {str(record["source_id"]) for record in validation_records}
+    training_record_ids = {str(record["id"]) for record in training_records}
+    validation_record_ids = {str(record["id"]) for record in validation_records}
+
+    shared_sources = tuple(sorted(training_source_ids & validation_source_ids))
+    shared_records = tuple(sorted(training_record_ids & validation_record_ids))
+
+    return SplitIsolationReport(
+        clean=not shared_sources and not shared_records,
+        training_file_sha256=training_sha,
+        validation_file_sha256=validation_sha,
+        training_source_ids=tuple(sorted(training_source_ids)),
+        validation_source_ids=tuple(sorted(validation_source_ids)),
+        shared_source_ids=shared_sources,
+        shared_record_ids=shared_records,
+    )

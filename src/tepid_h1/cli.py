@@ -9,8 +9,17 @@ from typing import Any
 
 from .config import TepidH1Config
 from .data import (
+    AuditFinding,
+    AuditReport,
+    BenchmarkSample,
+    ContaminationMatch,
+    CorpusStats,
+    DecontaminationReport,
+    SplitIsolationReport,
+    TextRecord,
     audit_inventory,
     benchmark_candidate,
+    check_paired_corpus_isolation,
     compare_corpora,
     load_corpus,
     load_inventory,
@@ -163,6 +172,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     corpus_stats.add_argument("corpus", type=Path)
     corpus_stats.add_argument("--report", type=Path)
+    corpus_compare = subparsers.add_parser(
+        "corpus-compare",
+        help="check isolation between paired training and validation corpora",
+    )
+    corpus_compare.add_argument("training", type=Path)
+    corpus_compare.add_argument("validation", type=Path)
+    corpus_compare.add_argument("--report", type=Path)
     return parser
 
 
@@ -621,6 +637,17 @@ def main() -> int:
         }
         _write_payload(payload, args.report)
         return 0 if not stats.duplicate_record_ids else 6
+    if args.command == "corpus-compare":
+        report = check_paired_corpus_isolation(args.training, args.validation)
+        payload = {
+            "schema_version": 1,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "training_file_sha256": file_sha256(args.training),
+            "validation_file_sha256": file_sha256(args.validation),
+            **report.to_dict(),
+        }
+        _write_payload(payload, args.report)
+        return 0 if report.clean else 7
     raise AssertionError(f"unsupported command: {args.command}")
 
 

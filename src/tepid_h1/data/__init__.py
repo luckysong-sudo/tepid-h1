@@ -8,7 +8,13 @@ from .decontamination import (
     compare_corpora,
     load_text_records,
 )
-from .stats import CorpusStats, load_paired_corpus_records, summarize_paired_corpus
+from .stats import (
+    CorpusStats,
+    SplitIsolationReport,
+    check_paired_corpus_isolation,
+    load_paired_corpus_records,
+    summarize_paired_corpus,
+)
 from .tokenizer_benchmark import (
     BenchmarkSample,
     benchmark_candidate,
@@ -23,9 +29,11 @@ __all__ = [
     "ContaminationMatch",
     "CorpusStats",
     "DecontaminationReport",
+    "SplitIsolationReport",
     "TextRecord",
     "audit_inventory",
     "benchmark_candidate",
+    "check_paired_corpus_isolation",
     "compare_corpora",
     "load_corpus",
     "load_inventory",
