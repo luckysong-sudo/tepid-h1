@@ -24,10 +24,16 @@ class PairedExperimentTests(unittest.TestCase):
         self.assertEqual(trial["hybrid"]["trained_tokens"], 5)
         self.assertEqual(trial["baseline"]["trained_tokens"], 5)
         self.assertEqual(report["data"]["tokens_per_model_per_trial"], 5)
+        self.assertEqual(report["data"]["probe_batches"], 1)
+        self.assertEqual(report["data"]["probe_tokens_per_model_per_trial"], 5)
+        self.assertEqual(len(report["data"]["probe_batch_sha256"]), 64)
         self.assertTrue(report["parameters"]["hybrid"]["estimate_matches_actual"])
         self.assertTrue(report["parameters"]["baseline"]["estimate_matches_actual"])
         self.assertGreater(trial["hybrid"]["tokens_per_second"], 0)
         self.assertGreater(trial["baseline"]["tokens_per_second"], 0)
+        self.assertIn("eval_loss_change", trial["hybrid"])
+        self.assertIn("eval_perplexity_change", trial["baseline"])
+        self.assertEqual(trial["hybrid"]["evaluated_tokens"], 5)
         self.assertEqual(report["environment"]["device_type"], "cpu")
         self.assertEqual(report["environment"]["dtype"], "float32")
         self.assertIsNone(trial["hybrid"]["peak_memory_bytes"])
@@ -101,9 +107,12 @@ class PairedExperimentTests(unittest.TestCase):
         self.assertEqual(len(report["data"]["inventory_file_sha256"]), 64)
         self.assertEqual(len(report["trials"]), 2)
         self.assertEqual(report["aggregates"]["hybrid"]["loss_change"]["samples"], 2)
+        self.assertEqual(report["aggregates"]["hybrid"]["eval_loss_change"]["samples"], 2)
         throughput_ratio = report["aggregates"]["paired"]["baseline_over_hybrid_tokens_per_second"]
         self.assertEqual(throughput_ratio["samples"], 2)
         self.assertGreater(throughput_ratio["ci95_low"], 0)
+        paired_eval_delta = report["aggregates"]["paired"]["hybrid_minus_baseline_eval_loss_change"]
+        self.assertEqual(paired_eval_delta["samples"], 2)
 
     def test_governed_corpus_rejects_checksum_mismatch(self):
         from tepid_h1.experiments import PairedExperimentConfig, load_governed_corpus

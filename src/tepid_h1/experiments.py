@@ -23,7 +23,7 @@ from .modeling import (
     baseline_parameter_estimate,
     hybrid_parameter_estimate,
 )
-from .training import TrainableCausalLM, causal_lm_train_step
+from .training import TrainableCausalLM, causal_lm_train_step, evaluate_causal_lm
 
 
 @dataclass(frozen=True)
@@ -170,13 +170,16 @@ def run_paired_smoke(
     batches = (
         corpus.batches if corpus is not None else _generate_batches(config, model_config.vocab_size)
     )
+    probe_batches = _generate_probe_batches(config, model_config.vocab_size)
     device, dtype = _resolve_execution(config)
     execution_batches = tuple(batch.to(device=device) for batch in batches)
+    execution_probe_batches = tuple(batch.to(device=device) for batch in probe_batches)
 
     trials = [
         _run_trial(
             config,
             execution_batches,
+            execution_probe_batches,
             model_config=model_config,
             baseline_config=baseline_config,
             trial_index=trial_index,
@@ -192,9 +195,14 @@ def run_paired_smoke(
     data: dict[str, Any] = {
         "kind": "governed_fixed_token_corpus" if governed else "deterministic_random_tokens",
         "batch_sha256": (corpus.batch_sha256 if corpus is not None else _batch_digest(batches)),
+        "probe_batch_sha256": _batch_digest(probe_batches),
         "batches": len(batches),
+        "probe_batches": len(probe_batches),
         "tokens_per_model_per_trial": trained_tokens,
         "tokens_per_model_total": trained_tokens * config.trials,
+        "probe_tokens_per_model_per_trial": sum(
+            batch.shape[0] * (batch.shape[1] - 1) for batch in probe_batches
+        ),
     }
     if corpus is not None:
         data.update(
@@ -241,6 +249,13 @@ def run_paired_smoke(
                     [
                         float(trial["hybrid"]["loss_change"])
                         - float(trial["baseline"]["loss_change"])
+                        for trial in trials
+                    ]
+                ),
+                "hybrid_minus_baseline_eval_loss_change": _summary_statistics(
+                    [
+                        float(trial["hybrid"]["eval_loss_change"])
+                        - float(trial["baseline"]["eval_loss_change"])
                         for trial in trials
                     ]
                 ),
@@ -316,6 +331,7 @@ def _records_to_batches(
 def _run_trial(
     config: PairedExperimentConfig,
     batches: tuple[Tensor, ...],
+    probe_batches: tuple[Tensor, ...],
     *,
     model_config: TepidH1Config,
     baseline_config: TransformerBaselineConfig,
@@ -338,6 +354,9 @@ def _run_trial(
     }
     models: dict[str, TrainableCausalLM] = {"hybrid": hybrid, "baseline": baseline}
     _warm_up(models, batches[0])
+    evaluation_before = {
+        name: evaluate_causal_lm(model, probe_batches) for name, model in models.items()
+    }
 
     measurements: dict[str, list[dict[str, Any]]] = {
         "hybrid": [],
@@ -370,6 +389,9 @@ def _run_trial(
                     "peak_memory_bytes": peak_memory,
                 }
             )
+    evaluation_after = {
+        name: evaluate_causal_lm(model, probe_batches) for name, model in models.items()
+    }
 
     hybrid_estimate = hybrid_parameter_estimate(model_config)
     baseline_estimate = baseline_parameter_estimate(baseline_config)
@@ -381,11 +403,15 @@ def _run_trial(
             measurements["hybrid"],
             actual_parameters=_parameter_count(hybrid),
             estimated_physical_parameters=hybrid_estimate["physical_parameters"],
+            evaluation_before=asdict(evaluation_before["hybrid"]),
+            evaluation_after=asdict(evaluation_after["hybrid"]),
         ),
         "baseline": _summarize(
             measurements["baseline"],
             actual_parameters=_parameter_count(baseline),
             estimated_physical_parameters=int(baseline_estimate["physical_parameters"]),
+            evaluation_before=asdict(evaluation_before["baseline"]),
+            evaluation_after=asdict(evaluation_after["baseline"]),
         ),
     }
 
@@ -401,6 +427,19 @@ def _generate_batches(config: PairedExperimentConfig, vocab_size: int) -> tuple[
             generator=generator,
         )
         for _ in range(config.steps)
+    )
+
+
+def _generate_probe_batches(config: PairedExperimentConfig, vocab_size: int) -> tuple[Tensor, ...]:
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(config.seed + 10_001)
+    return (
+        torch.randint(
+            0,
+            vocab_size,
+            (config.batch_size, config.sequence_length),
+            generator=generator,
+        ),
     )
 
 
@@ -428,6 +467,8 @@ def _summarize(
     *,
     actual_parameters: int,
     estimated_physical_parameters: int,
+    evaluation_before: dict[str, Any],
+    evaluation_after: dict[str, Any],
 ) -> dict[str, Any]:
     elapsed = sum(float(item["elapsed_seconds"]) for item in measurements)
     trained_tokens = sum(int(item["trained_tokens"]) for item in measurements)
@@ -446,6 +487,15 @@ def _summarize(
         "initial_loss": losses[0],
         "final_loss": losses[-1],
         "loss_change": losses[-1] - losses[0],
+        "initial_eval_loss": evaluation_before["loss"],
+        "final_eval_loss": evaluation_after["loss"],
+        "eval_loss_change": evaluation_after["loss"] - evaluation_before["loss"],
+        "initial_eval_perplexity": evaluation_before["perplexity"],
+        "final_eval_perplexity": evaluation_after["perplexity"],
+        "eval_perplexity_change": (
+            evaluation_after["perplexity"] - evaluation_before["perplexity"]
+        ),
+        "evaluated_tokens": evaluation_after["evaluated_tokens"],
         "peak_memory_bytes": max(peak_memory_values) if peak_memory_values else None,
         "steps": measurements,
     }
@@ -464,6 +514,18 @@ def _aggregate_model(summaries: list[dict[str, Any]]) -> dict[str, Any]:
         "final_loss": _summary_statistics([float(summary["final_loss"]) for summary in summaries]),
         "loss_change": _summary_statistics(
             [float(summary["loss_change"]) for summary in summaries]
+        ),
+        "initial_eval_loss": _summary_statistics(
+            [float(summary["initial_eval_loss"]) for summary in summaries]
+        ),
+        "final_eval_loss": _summary_statistics(
+            [float(summary["final_eval_loss"]) for summary in summaries]
+        ),
+        "eval_loss_change": _summary_statistics(
+            [float(summary["eval_loss_change"]) for summary in summaries]
+        ),
+        "eval_perplexity_change": _summary_statistics(
+            [float(summary["eval_perplexity_change"]) for summary in summaries]
         ),
     }
     peak_memory_values = [
