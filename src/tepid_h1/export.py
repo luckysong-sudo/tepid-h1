@@ -108,10 +108,13 @@ class ModelExporter:
 
         # Save config separately
         config_path = output_path.parent / "config.json"
-        config_dict = (
-            asdict(self.config) if hasattr(self.config, "__dataclass_fields__") else self.config
-        )
+        config_dict = _export_config_payload(self.config)
         if metadata:
+            overlapping = sorted(set(config_dict).intersection(metadata))
+            if overlapping:
+                raise ValueError(
+                    "export metadata must not override model config keys: " + ", ".join(overlapping)
+                )
             config_dict.update(metadata)
         config_path.write_text(json.dumps(config_dict, indent=2, ensure_ascii=False))
 
@@ -174,3 +177,11 @@ def _normalize_export_formats(formats: list[str] | None) -> list[str]:
         if fmt not in normalized:
             normalized.append(fmt)
     return normalized
+
+
+def _export_config_payload(config: Any) -> dict[str, Any]:
+    if hasattr(config, "__dataclass_fields__"):
+        return dict(asdict(config))
+    if isinstance(config, dict):
+        return dict(config)
+    raise ValueError("export config must be a dataclass or dictionary")

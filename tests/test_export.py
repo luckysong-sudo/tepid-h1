@@ -70,6 +70,30 @@ class TestModelExporter:
         assert config["author"] == "test"
         assert config["version"] == "1.0"
 
+    def test_export_safe_tensor_rejects_metadata_config_override(
+        self, exporter: ModelExporter, tmp_path: Path
+    ) -> None:
+        output_path = tmp_path / "model.safetensors"
+
+        with pytest.raises(ValueError, match="must not override"):
+            exporter.export_safe_tensor(output_path, metadata={"vocab_size": 999})
+
+    def test_export_safe_tensor_does_not_mutate_dict_config(self, tmp_path: Path) -> None:
+        model = torch.nn.Linear(2, 2)
+        config = {"vocab_size": 8, "hidden_size": 2}
+        exporter = ModelExporter(model, config=config)
+
+        exporter.export_safe_tensor(tmp_path / "model.safetensors", metadata={"author": "test"})
+
+        assert config == {"vocab_size": 8, "hidden_size": 2}
+
+    def test_export_safe_tensor_rejects_unsupported_config_type(self, tmp_path: Path) -> None:
+        model = torch.nn.Linear(2, 2)
+        exporter = ModelExporter(model, config=object())
+
+        with pytest.raises(ValueError, match="dataclass or dictionary"):
+            exporter.export_safe_tensor(tmp_path / "model.safetensors")
+
     @pytest.mark.skip(reason="TorchScript not supported for keyword-only args in Python 3.14+")
     def test_export_for_inference(self, exporter: ModelExporter, tmp_path: Path) -> None:
         output_dir = tmp_path / "exported"
