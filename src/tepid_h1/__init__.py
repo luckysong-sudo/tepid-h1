@@ -50,6 +50,7 @@ from .modeling import (
     hybrid_parameter_estimate,
 )
 from .modeling.cache import AttentionCache
+from .project_status import ProjectStatusReport, StatusDimension, build_project_status_report
 from .quantization import QuantizationConfig
 from .stage_gates import StageGate, StageGateReport, audit_stage_gates, load_stage_gates
 
@@ -82,6 +83,7 @@ __all__ = [
     "ModelValidationError",
     "PrecisionMode",
     "QuantizationConfig",
+    "ProjectStatusReport",
     "RuntimeDependencies",
     "apply_lora",
     "decode_text",
@@ -92,6 +94,7 @@ __all__ = [
     "SequenceMixer",
     "StageGate",
     "StageGateReport",
+    "StatusDimension",
     "SwiGLU",
     "ToolCall",
     "ToolResult",
@@ -109,6 +112,7 @@ __all__ = [
     "apply_gradient_checkpointing",
     "audit_stage_gates",
     "baseline_parameter_estimate",
+    "build_project_status_report",
     "comparison_report",
     "estimate_memory_savings",
     "hybrid_parameter_estimate",

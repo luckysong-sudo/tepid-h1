@@ -33,6 +33,13 @@ class CLIParserTests(unittest.TestCase):
         self.assertEqual(args.command, "stage-gates")
         self.assertEqual(Path(args.config), Path("configs/stage_gates.json"))
 
+    def test_project_status_command(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["project-status"])
+        self.assertEqual(args.command, "project-status")
+
     def test_decontaminate_command(self):
         from tepid_h1.cli import build_parser
 
@@ -149,6 +156,24 @@ class CLIIntegrationTests(unittest.TestCase):
 
         self.assertTrue(report["passed"])
         self.assertEqual(len(report["gates"]), 6)
+
+    def test_project_status_command_outputs_json(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        with patch.object(sys, "argv", ["tepid-h1", "project-status"]):
+            with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                result = main()
+                self.assertEqual(result, 0)
+                output = mock_stdout.getvalue()
+                report = json.loads(output)
+
+        self.assertEqual(report["prototype_overall_percent"], 68)
+        self.assertEqual(report["formal_training_overall_percent"], 38)
+        self.assertEqual(len(report["dimensions"]), 8)
 
 
 if __name__ == "__main__":

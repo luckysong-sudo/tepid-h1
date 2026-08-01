@@ -26,6 +26,7 @@ Agent Runtime、ZeroGPU 适配和 CI 验证。
 - LoRA、量化、混合精度、梯度 checkpointing、导出和基础推理工具。
 - Hugging Face ZeroGPU bundle、远端质量门和持久化报告证据。
 - GitHub Actions、pre-commit、Ruff、flake8 和 mypy 阻塞检查。
+- 多维度项目完善度报告，可通过 `tepid-h1 project-status` 输出。
 
 ## 当前限制
 

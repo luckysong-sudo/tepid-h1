@@ -29,6 +29,7 @@ from .evaluation import (
     score_retrieval,
     write_retrieval_suite,
 )
+from .project_status import build_project_status_report
 from .stage_gates import audit_stage_gates, load_stage_gates
 
 
@@ -53,6 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("configs/stage_gates.json"),
     )
     stage_gates.add_argument("--report", type=Path)
+    project_status = subparsers.add_parser(
+        "project-status",
+        help="print the current multi-dimensional project completion report",
+    )
+    project_status.add_argument("--report", type=Path)
     decontamination = subparsers.add_parser(
         "decontaminate",
         help="compare training JSONL against a held-out benchmark JSONL",
@@ -255,6 +261,9 @@ def main() -> int:
         stage_gate_report = audit_stage_gates(load_stage_gates(args.config))
         _write_payload(stage_gate_report.to_dict(), args.report)
         return 0 if stage_gate_report.passed else 8
+    if args.command == "project-status":
+        _write_payload(build_project_status_report().to_dict(), args.report)
+        return 0
     if args.command == "decontaminate":
         decontamination_report = compare_corpora(
             load_text_records(args.training),
