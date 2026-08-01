@@ -88,6 +88,59 @@ class ModelTests(unittest.TestCase):
                 atol=1e-6,
             )
 
+    def test_grouped_moe_matches_dispatch_oracle_forward_and_gradients(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import RoutedMoEReference
+
+        def dispatch_oracle(layer, input_tensor):
+            original_shape = input_tensor.shape
+            flat = input_tensor.reshape(-1, original_shape[-1])
+            probabilities = layer.router(flat).softmax(dim=-1)
+            weights, indices = probabilities.topk(layer.top_k, dim=-1)
+            weights = weights / weights.sum(dim=-1, keepdim=True)
+
+            routed = torch.zeros_like(flat)
+            for expert_index, expert in enumerate(layer.experts):
+                token_indices, slots = (indices == expert_index).nonzero(as_tuple=True)
+                if token_indices.numel() == 0:
+                    continue
+                expert_output = expert(flat[token_indices])
+                expert_output = expert_output * weights[token_indices, slots].unsqueeze(-1)
+                routed.index_add_(0, token_indices, expert_output)
+            return (layer.shared_expert(flat) + routed).reshape(original_shape)
+
+        torch.manual_seed(37)
+        config = TepidH1Config.smoke()
+        oracle = RoutedMoEReference(config)
+        grouped = RoutedMoEReference(config)
+        grouped.load_state_dict(oracle.state_dict())
+        oracle_input = torch.randn(2, 5, config.hidden_size, requires_grad=True)
+        grouped_input = oracle_input.detach().clone().requires_grad_(True)
+
+        oracle_output = dispatch_oracle(oracle, oracle_input)
+        grouped_output = grouped(grouped_input)
+        oracle_output.square().mean().backward()
+        grouped_output.square().mean().backward()
+
+        torch.testing.assert_close(grouped_output, oracle_output, rtol=1e-5, atol=1e-6)
+        torch.testing.assert_close(grouped_input.grad, oracle_input.grad, rtol=1e-5, atol=1e-6)
+        for grouped_parameter, oracle_parameter in zip(
+            grouped.parameters(),
+            oracle.parameters(),
+            strict=True,
+        ):
+            torch.testing.assert_close(
+                grouped_parameter.grad,
+                oracle_parameter.grad,
+                rtol=1e-5,
+                atol=1e-6,
+            )
+        self.assertIsNotNone(grouped.last_router_stats)
+        self.assertEqual(
+            int(grouped.last_router_stats.expert_counts.sum()),
+            oracle_input.shape[0] * oracle_input.shape[1] * config.moe_top_k,
+        )
+
     def test_model_chunked_forward_matches_single_pass(self):
         from tepid_h1.config import TepidH1Config
         from tepid_h1.modeling import TepidH1CausalLM

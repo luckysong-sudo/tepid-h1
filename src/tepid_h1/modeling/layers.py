@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 import torch
 from torch import Tensor, nn
@@ -48,7 +49,7 @@ class AttentionState:
 
 
 class RoutedMoEReference(nn.Module):
-    """Correctness-first Top-K MoE; replace with grouped GEMM before scale-up."""
+    """Correctness-first Top-K MoE with grouped selected-expert evaluation."""
 
     def __init__(self, config: TepidH1Config) -> None:
         super().__init__()
@@ -72,22 +73,27 @@ class RoutedMoEReference(nn.Module):
         weights, indices = probabilities.topk(self.top_k, dim=-1)
         weights = weights / weights.sum(dim=-1, keepdim=True)
 
-        routed = torch.zeros_like(flat)
-        counts = torch.zeros(self.num_experts, dtype=torch.long, device=x.device)
-        for expert_index, expert in enumerate(self.experts):
-            token_indices, slots = (indices == expert_index).nonzero(as_tuple=True)
-            if token_indices.numel() == 0:
-                continue
-            counts[expert_index] = token_indices.numel()
-            expert_output = expert(flat[token_indices])
-            expert_output = expert_output * weights[token_indices, slots].unsqueeze(-1)
-            routed.index_add_(0, token_indices, expert_output)
+        routed = self._grouped_expert_output(flat, indices, weights)
+        counts = torch.bincount(indices.reshape(-1), minlength=self.num_experts)
 
         self.last_router_stats = MoERouterStats(
             expert_counts=counts.detach(),
             router_probabilities=probabilities.detach(),
         )
         return (self.shared_expert(flat) + routed).reshape(original_shape)
+
+    def _grouped_expert_output(self, flat: Tensor, indices: Tensor, weights: Tensor) -> Tensor:
+        experts = [cast(SwiGLU, expert) for expert in self.experts]
+        gate_up_weight = torch.stack([expert.gate_up.weight for expert in experts])
+        down_weight = torch.stack([expert.down.weight for expert in experts])
+        selected_gate_up = gate_up_weight[indices]
+        selected_down = down_weight[indices]
+
+        projected = torch.einsum("th,tkoh->tko", flat, selected_gate_up)
+        gate, value = projected.chunk(2, dim=-1)
+        hidden = F.silu(gate) * value
+        expert_output = torch.einsum("tki,tkhi->tkh", hidden, selected_down)
+        return (expert_output * weights.unsqueeze(-1)).sum(dim=1)
 
 
 class GatedDeltaMemoryReference(nn.Module):
