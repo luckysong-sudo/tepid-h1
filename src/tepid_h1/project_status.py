@@ -121,7 +121,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="backend_performance",
-        percent=53,
+        percent=54,
         evidence=(
             "Delta backend validation compares forward, state and gradients",
             "Delta benchmark matrix reports shape-level throughput and qualification status",
@@ -137,6 +137,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "quantized layer application validates targets before mutating model weights",
             "quantization config normalizes modes and rejects unsupported axes",
             "quantized artifact loading rejects incompatible tensor dtypes and metadata shapes",
+            "quantized size estimates honor the same explicit skip-layer contract as export",
         ),
         gaps=(
             "Triton/CUDA/Inductor optimized Delta, NSA and MoE kernels are not complete",

@@ -370,8 +370,11 @@ def quantize_model(
 def estimate_quantized_size(
     model: nn.Module,
     config: QuantizationConfig,
+    *,
+    skip_layers: set[str] | None = None,
 ) -> dict[str, int]:
     """Estimate the quantized model size in bytes."""
+    skip = skip_layers or set()
     sizes: dict[str, int] = {
         "weight_bytes": 0,
         "scale_bytes": 0,
@@ -381,7 +384,7 @@ def estimate_quantized_size(
     for name, module in model.named_modules():
         if not isinstance(module, nn.Linear):
             continue
-        if any(pattern in name for pattern in {"skip"}):
+        if any(pattern in name for pattern in skip):
             continue
         weight_shape = module.weight.shape
         weight_numel = module.weight.numel()

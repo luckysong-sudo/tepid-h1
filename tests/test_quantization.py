@@ -189,6 +189,34 @@ class TestEstimateQuantizedSize:
         sizes = estimate_quantized_size(model, cfg)
         assert sizes["weight_bytes"] > 0
 
+    def test_estimate_counts_skip_named_layers_by_default(self) -> None:
+        model = nn.ModuleDict(
+            {
+                "keep": nn.Linear(8, 4, bias=False),
+                "skip_projection": nn.Linear(8, 4, bias=False),
+            }
+        )
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, group_size=4)
+        sizes = estimate_quantized_size(model, cfg)
+
+        assert sizes["weight_bytes"] == 64
+        assert sizes["scale_bytes"] == 64
+
+    def test_estimate_honors_explicit_skip_layers(self) -> None:
+        model = nn.ModuleDict(
+            {
+                "keep": nn.Linear(8, 4, bias=False),
+                "skip_projection": nn.Linear(8, 4, bias=False),
+            }
+        )
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, group_size=4)
+        sizes = estimate_quantized_size(model, cfg, skip_layers={"skip_projection"})
+        qlayers = quantize_model(model, cfg, skip_layers={"skip_projection"})
+
+        assert set(qlayers) == {"keep"}
+        assert sizes["weight_bytes"] == 32
+        assert sizes["scale_bytes"] == 32
+
     def test_estimate_uses_bytes_for_bias_and_totals(self) -> None:
         model = nn.Linear(8, 4)
         cfg = QuantizationConfig(mode=QuantizationMode.INT8, group_size=4)
