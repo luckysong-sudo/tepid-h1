@@ -67,6 +67,9 @@ class TestApplyGradientCheckpointing:
     def test_applies_to_all_modules(self) -> None:
         model = SimpleSequentialModel()
         checkpointed = apply_gradient_checkpointing(model, checkpoint_every=1)
+        assert isinstance(checkpointed.linear1, CheckpointedLayer)
+        assert isinstance(checkpointed.relu, CheckpointedLayer)
+        assert isinstance(checkpointed.linear2, CheckpointedLayer)
         x = torch.randn(2, 64)
         output = checkpointed(x)
         assert output.shape == (2, 64)
@@ -74,9 +77,29 @@ class TestApplyGradientCheckpointing:
     def test_checkpoint_every_2(self) -> None:
         model = SimpleSequentialModel()
         checkpointed = apply_gradient_checkpointing(model, checkpoint_every=2)
+        assert not isinstance(checkpointed.linear1, CheckpointedLayer)
+        assert isinstance(checkpointed.relu, CheckpointedLayer)
+        assert not isinstance(checkpointed.linear2, CheckpointedLayer)
         x = torch.randn(2, 64)
         output = checkpointed(x)
         assert output.shape == (2, 64)
+
+    def test_rejects_invalid_checkpoint_every(self) -> None:
+        model = SimpleSequentialModel()
+
+        try:
+            apply_gradient_checkpointing(model, checkpoint_every=0)
+        except ValueError as error:
+            assert "checkpoint_every" in str(error)
+        else:
+            raise AssertionError("checkpoint_every=0 should fail")
+
+        try:
+            apply_gradient_checkpointing(model, checkpoint_every=True)
+        except TypeError as error:
+            assert "checkpoint_every" in str(error)
+        else:
+            raise AssertionError("boolean checkpoint_every should fail")
 
     def test_gradient_flow(self) -> None:
         model = SimpleSequentialModel()
@@ -98,7 +121,7 @@ class TestApplyGradientCheckpointing:
         loss = output.sum()
         loss.backward()
         # Verify gradients are computed correctly
-        assert model.linear1.weight.grad is not None
+        assert model.linear1.layer.weight.grad is not None
 
 
 class TestWrapLayersWithCheckpointing:
@@ -107,6 +130,9 @@ class TestWrapLayersWithCheckpointing:
     def test_wraps_specified_layers(self) -> None:
         model = SimpleSequentialModel()
         checkpointed = wrap_layers_with_checkpointing(model, layer_indices=[0, 1])
+        assert isinstance(checkpointed.linear1, CheckpointedLayer)
+        assert isinstance(checkpointed.relu, CheckpointedLayer)
+        assert not isinstance(checkpointed.linear2, CheckpointedLayer)
         x = torch.randn(2, 64)
         output = checkpointed(x)
         assert output.shape == (2, 64)
@@ -114,9 +140,36 @@ class TestWrapLayersWithCheckpointing:
     def test_does_not_wrap_other_layers(self) -> None:
         model = SimpleSequentialModel()
         checkpointed = wrap_layers_with_checkpointing(model, layer_indices=[])
+        assert not isinstance(checkpointed.linear1, CheckpointedLayer)
+        assert not isinstance(checkpointed.relu, CheckpointedLayer)
+        assert not isinstance(checkpointed.linear2, CheckpointedLayer)
         x = torch.randn(2, 64)
         output = checkpointed(x)
         assert output.shape == (2, 64)
+
+    def test_rejects_invalid_layer_indices(self) -> None:
+        model = SimpleSequentialModel()
+
+        try:
+            wrap_layers_with_checkpointing(model, layer_indices=[-1])
+        except ValueError as error:
+            assert "layer_indices" in str(error)
+        else:
+            raise AssertionError("negative layer index should fail")
+
+        try:
+            wrap_layers_with_checkpointing(model, layer_indices=[True])
+        except TypeError as error:
+            assert "layer_indices" in str(error)
+        else:
+            raise AssertionError("boolean layer index should fail")
+
+        try:
+            wrap_layers_with_checkpointing(model, layer_indices=[3])
+        except ValueError as error:
+            assert "out of range" in str(error)
+        else:
+            raise AssertionError("out-of-range layer index should fail")
 
     def test_gradient_flow(self) -> None:
         model = SimpleSequentialModel()

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from functools import wraps
 from typing import Any
 
 import torch
@@ -22,30 +21,10 @@ def apply_gradient_checkpointing(
     Returns:
         The model with gradient checkpointing applied.
     """
-    checkpoint_counter = [0]
-
-    def make_checkpointable(module: nn.Module) -> nn.Module:
-        original_forward = module.forward
-
-        @wraps(original_forward)
-        def checkpointed_forward(*args: Any, **kwargs: Any) -> torch.Tensor:
-            checkpoint_counter[0] += 1
-            if checkpoint_counter[0] % checkpoint_every == 0:
-                return torch.utils.checkpoint.checkpoint(
-                    original_forward,
-                    *args,
-                    use_reentrant=False,
-                    **kwargs,
-                )
-            return original_forward(*args, **kwargs)
-
-        module.forward = checkpointed_forward
-        return module
-
-    # Apply to all modules
-    for module in list(model.modules())[1:]:  # Skip the root model
-        if hasattr(module, "forward"):
-            make_checkpointable(module)
+    _validate_checkpoint_every(checkpoint_every)
+    for index, parent, name, layer in _checkpointable_layers(model):
+        if (index + 1) % checkpoint_every == 0:
+            parent._modules[name] = CheckpointedLayer(layer, enabled=True)
 
     return model
 
@@ -58,7 +37,7 @@ class CheckpointedLayer(nn.Module):
         self.layer = layer
         self.enabled = enabled
 
-    def forward(self, *args: Any, **kwargs: Any) -> torch.Tensor:
+    def forward(self, *args: Any, **kwargs: Any) -> Any:
         if self.enabled:
             return torch.utils.checkpoint.checkpoint(
                 self.layer,
@@ -85,30 +64,15 @@ def wrap_layers_with_checkpointing(
     Returns:
         The model with checkpointing applied to specified layers.
     """
-    layer_counter = [0]
-
-    def apply_checkpointing(module: nn.Module) -> nn.Module:
-        if hasattr(module, "forward"):
-            original_forward = module.forward
-
-            def wrapped_forward(*args: Any, **kwargs: Any) -> torch.Tensor:
-                current_layer = layer_counter[0]
-                layer_counter[0] += 1
-                if current_layer in layer_indices:
-                    return torch.utils.checkpoint.checkpoint(
-                        original_forward,
-                        *args,
-                        use_reentrant=False,
-                        **kwargs,
-                    )
-                return original_forward(*args, **kwargs)
-
-            module.forward = wrapped_forward
-        return module
-
-    for module in list(model.modules())[1:]:  # Skip the root model
-        if hasattr(module, "forward"):
-            apply_checkpointing(module)
+    requested_indices = _validate_layer_indices(layer_indices)
+    layers = _checkpointable_layers(model)
+    available_indices = {index for index, _, _, _ in layers}
+    missing_indices = sorted(requested_indices.difference(available_indices))
+    if missing_indices:
+        raise ValueError(f"layer_indices are out of range: {missing_indices}")
+    for index, parent, name, layer in layers:
+        if index in requested_indices:
+            parent._modules[name] = CheckpointedLayer(layer, enabled=True)
 
     return model
 
@@ -149,3 +113,39 @@ def estimate_memory_savings(
             param_bytes + activation_memory - saved_memory
         ),
     }
+
+
+def _validate_checkpoint_every(checkpoint_every: int) -> None:
+    if not isinstance(checkpoint_every, int) or isinstance(checkpoint_every, bool):
+        raise TypeError("checkpoint_every must be an integer")
+    if checkpoint_every <= 0:
+        raise ValueError("checkpoint_every must be positive")
+
+
+def _validate_layer_indices(layer_indices: list[int]) -> set[int]:
+    indices: set[int] = set()
+    for index in layer_indices:
+        if not isinstance(index, int) or isinstance(index, bool):
+            raise TypeError("layer_indices must contain integers")
+        if index < 0:
+            raise ValueError("layer_indices must be non-negative")
+        indices.add(index)
+    return indices
+
+
+def _checkpointable_layers(
+    model: nn.Module,
+) -> list[tuple[int, nn.Module, str, nn.Module]]:
+    layers: list[tuple[int, nn.Module, str, nn.Module]] = []
+
+    def visit(parent: nn.Module) -> None:
+        for name, child in parent.named_children():
+            if isinstance(child, CheckpointedLayer):
+                continue
+            if any(child.children()):
+                visit(child)
+                continue
+            layers.append((len(layers), parent, name, child))
+
+    visit(model)
+    return layers
