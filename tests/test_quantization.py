@@ -14,6 +14,7 @@ from tepid_h1.quantization import (
     QuantizedLayer,
     apply_quantized_model,
     estimate_quantized_size,
+    load_quantized_model,
     quantize_model,
     save_quantized_model,
 )
@@ -212,3 +213,56 @@ class TestSaveQuantizedModel:
         assert layer["weight"].dtype == torch.int8
         assert layer["scales"].dtype == torch.float32
         assert layer["original_shape"] == (4, 8)
+        assert artifacts["config"]["axis"] == -1
+
+
+class TestLoadQuantizedModel:
+    def test_load_saved_quantized_layers(self, tmp_path: Path) -> None:
+        model = nn.Linear(7, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT4, group_size=4)
+        qlayers = quantize_model(model, cfg)
+        path = tmp_path / "model.pt"
+        save_quantized_model(model, qlayers, path, config=cfg)
+
+        loaded = load_quantized_model(path)
+
+        assert list(loaded) == [""]
+        layer = loaded[""]
+        assert layer.weight.dtype == torch.uint8
+        assert layer.weight.shape == (4, 4)
+        assert layer.quantization_mode == QuantizationMode.INT4
+        assert layer.original_shape == (4, 7)
+        assert torch.allclose(layer.dequantize(), model.weight, atol=layer.scales.max().item())
+
+    def test_loaded_layers_can_be_applied_for_inference(self, tmp_path: Path) -> None:
+        torch.manual_seed(123)
+        model = nn.Linear(8, 4)
+        reference = nn.Linear(8, 4)
+        reference.load_state_dict(model.state_dict())
+        inputs = torch.randn(3, 8)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        path = tmp_path / "model.pt"
+        save_quantized_model(model, quantize_model(model, cfg), path, config=cfg)
+
+        apply_quantized_model(model, load_quantized_model(path))
+
+        assert torch.allclose(model(inputs), reference(inputs), atol=0.02)
+        assert model.weight.requires_grad is False
+
+    def test_load_rejects_unknown_schema(self, tmp_path: Path) -> None:
+        path = tmp_path / "bad.pt"
+        torch.save({"schema_version": 999, "quantized_layers": {}}, path)
+
+        with pytest.raises(ValueError, match="schema_version"):
+            load_quantized_model(path)
+
+    def test_load_rejects_corrupt_weight_shape(self, tmp_path: Path) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        path = tmp_path / "model.pt"
+        artifact = save_quantized_model(model, quantize_model(model, cfg), path, config=cfg)
+        artifact["quantized_layers"][""]["weight"] = torch.zeros(1, dtype=torch.int8)
+        torch.save(artifact, path)
+
+        with pytest.raises(ValueError, match="weight shape"):
+            load_quantized_model(path)

@@ -43,6 +43,14 @@ class QuantizationConfig:
                 raise ValueError("group_size must be positive for integer quantization")
 
 
+_DTYPE_BY_NAME: dict[str, torch.dtype] = {
+    "torch.float16": torch.float16,
+    "torch.bfloat16": torch.bfloat16,
+    "torch.float32": torch.float32,
+    "torch.float64": torch.float64,
+}
+
+
 @dataclass
 class QuantizedLayer:
     """A quantized linear layer with metadata."""
@@ -448,6 +456,7 @@ def save_quantized_model(
             "mode": config.mode.value,
             "group_size": config.group_size,
             "symmetric": config.symmetric,
+            "axis": config.axis,
         }
 
     for name, quantized in quantized_layers.items():
@@ -469,3 +478,113 @@ def save_quantized_model(
 
     torch.save(artifacts, output_path)
     return artifacts
+
+
+def load_quantized_model(
+    input_path: str | Path,
+    *,
+    map_location: str | torch.device | None = None,
+) -> dict[str, QuantizedLayer]:
+    """Load quantized linear layers saved by ``save_quantized_model``."""
+    artifact = torch.load(Path(input_path), map_location=map_location, weights_only=True)
+    if not isinstance(artifact, dict):
+        raise ValueError("quantized artifact must be a dictionary")
+    if artifact.get("schema_version") != 1:
+        raise ValueError("unsupported quantized artifact schema_version")
+
+    layers = artifact.get("quantized_layers")
+    if not isinstance(layers, dict):
+        raise ValueError("quantized artifact must contain quantized_layers")
+
+    loaded: dict[str, QuantizedLayer] = {}
+    for name, layer_artifact in layers.items():
+        if not isinstance(name, str):
+            raise ValueError("quantized layer names must be strings")
+        if not isinstance(layer_artifact, dict):
+            raise ValueError(f"quantized layer {name!r} must be a dictionary")
+
+        mode = _load_quantization_mode(layer_artifact, name)
+        original_dtype = _load_original_dtype(layer_artifact, name)
+        original_shape = _load_original_shape(layer_artifact, name)
+        weight = _load_required_tensor(layer_artifact, "weight", name)
+        scales = _load_required_tensor(layer_artifact, "scales", name)
+        bias = _load_optional_tensor(layer_artifact, "bias", name)
+        zeros = _load_optional_tensor(layer_artifact, "zeros", name)
+        dequantized_cache = _load_optional_tensor(layer_artifact, "dequantized", name)
+
+        expected_packed_width = (original_shape[-1] + 1) // 2
+        if mode in {QuantizationMode.INT4, QuantizationMode.NF4}:
+            expected_weight_shape = (*original_shape[:-1], expected_packed_width)
+        else:
+            expected_weight_shape = original_shape
+        if tuple(weight.shape) != expected_weight_shape:
+            raise ValueError(
+                f"quantized layer {name!r} weight shape {tuple(weight.shape)!r} "
+                f"does not match expected {expected_weight_shape!r}"
+            )
+        if bias is not None and tuple(bias.shape) != (original_shape[0],):
+            raise ValueError(f"quantized layer {name!r} bias shape does not match output dim")
+        if dequantized_cache is not None and tuple(dequantized_cache.shape) != original_shape:
+            raise ValueError(f"quantized layer {name!r} dequantized cache shape is invalid")
+
+        loaded[name] = QuantizedLayer(
+            weight=weight,
+            bias=bias,
+            scales=scales,
+            zeros=zeros,
+            original_dtype=original_dtype,
+            quantization_mode=mode,
+            original_shape=original_shape,
+            dequantized_cache=dequantized_cache,
+        )
+    return loaded
+
+
+def _load_quantization_mode(layer_artifact: dict[str, Any], name: str) -> QuantizationMode:
+    raw_mode = layer_artifact.get("quantization_mode")
+    try:
+        return QuantizationMode(raw_mode)
+    except ValueError as error:
+        raise ValueError(f"quantized layer {name!r} has invalid quantization_mode") from error
+
+
+def _load_original_dtype(layer_artifact: dict[str, Any], name: str) -> torch.dtype:
+    raw_dtype = layer_artifact.get("original_dtype")
+    if not isinstance(raw_dtype, str) or raw_dtype not in _DTYPE_BY_NAME:
+        raise ValueError(f"quantized layer {name!r} has invalid original_dtype")
+    return _DTYPE_BY_NAME[raw_dtype]
+
+
+def _load_original_shape(layer_artifact: dict[str, Any], name: str) -> tuple[int, ...]:
+    raw_shape = layer_artifact.get("original_shape")
+    if (
+        not isinstance(raw_shape, (list, tuple))
+        or not raw_shape
+        or not all(isinstance(dim, int) and dim > 0 for dim in raw_shape)
+    ):
+        raise ValueError(f"quantized layer {name!r} has invalid original_shape")
+    return tuple(raw_shape)
+
+
+def _load_required_tensor(
+    layer_artifact: dict[str, Any],
+    field_name: str,
+    layer_name: str,
+) -> torch.Tensor:
+    value = layer_artifact.get(field_name)
+    if not isinstance(value, torch.Tensor):
+        raise ValueError(f"quantized layer {layer_name!r} missing tensor {field_name!r}")
+    return value.detach()
+
+
+def _load_optional_tensor(
+    layer_artifact: dict[str, Any],
+    field_name: str,
+    layer_name: str,
+) -> torch.Tensor | None:
+    value = layer_artifact.get(field_name)
+    if value is None:
+        return None
+    if not isinstance(value, torch.Tensor):
+        raise ValueError(f"quantized layer {layer_name!r} field {field_name!r} must be a tensor")
+    return value.detach()
