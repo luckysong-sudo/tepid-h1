@@ -1,5 +1,6 @@
 """Tests for mixed precision training utilities."""
 
+import pytest
 import torch
 
 
@@ -45,6 +46,31 @@ class TestMixedPrecisionConfig:
         config = MixedPrecisionConfig(enabled=False)
         assert config.enabled is False
 
+    def test_accepts_string_mode_and_rejects_invalid_controls(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, PrecisionMode
+
+        config = MixedPrecisionConfig(mode="float16")
+        assert config.mode == PrecisionMode.FP16
+        assert config.autocast_dtype == torch.float16
+
+        with pytest.raises(ValueError, match="PrecisionMode"):
+            MixedPrecisionConfig(mode="fp8")
+        with pytest.raises(TypeError, match="enabled"):
+            MixedPrecisionConfig(enabled=1)
+        with pytest.raises(TypeError, match="grad_scaler"):
+            MixedPrecisionConfig(grad_scaler=1)
+        with pytest.raises(ValueError, match="autocast_dtype"):
+            MixedPrecisionConfig(autocast_dtype=torch.float64)
+
+    def test_auto_mode_uses_fp32_without_cuda(self, monkeypatch):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, PrecisionMode
+
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+        config = MixedPrecisionConfig(mode=PrecisionMode.AUTO)
+
+        assert config.autocast_dtype == torch.float32
+
 
 class TestMixedPrecisionManager:
     """Test mixed precision manager."""
@@ -55,6 +81,8 @@ class TestMixedPrecisionManager:
         config = MixedPrecisionConfig()
         manager = MixedPrecisionManager(config)
         assert manager.config == config
+        if not torch.cuda.is_available():
+            assert manager.scaler is None
 
     def test_autocast_context_disabled(self):
         from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
@@ -86,3 +114,53 @@ class TestMixedPrecisionManager:
 
         # Should not raise
         manager.step(optimizer)
+
+    def test_to_device_preserves_integer_token_tensors(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig(mode="float16")
+        manager = MixedPrecisionManager(config)
+        input_ids = torch.tensor([[1, 2, 3]], dtype=torch.long)
+
+        moved = manager.to_device(input_ids, torch.device("cpu"))
+
+        assert moved.dtype == torch.long
+        assert torch.equal(moved, input_ids)
+
+    def test_to_device_casts_floating_tensors_to_autocast_dtype(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig(mode="bfloat16")
+        manager = MixedPrecisionManager(config)
+        activations = torch.ones(2, 3, dtype=torch.float32)
+
+        moved = manager.to_device(activations, torch.device("cpu"))
+
+        assert moved.dtype == torch.bfloat16
+
+    def test_load_state_rebuilds_config_and_autocast_dtype(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        manager = MixedPrecisionManager(MixedPrecisionConfig(mode="bfloat16"))
+
+        manager.load_state_dict(
+            {
+                "config": {
+                    "enabled": True,
+                    "mode": "float16",
+                    "grad_scaler": False,
+                }
+            }
+        )
+
+        assert manager.config.mode == "float16"
+        assert manager.config.autocast_dtype == torch.float16
+        assert manager.scaler is None
+
+    def test_load_state_rejects_invalid_config_payload(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        manager = MixedPrecisionManager(MixedPrecisionConfig())
+
+        with pytest.raises(TypeError, match="config state"):
+            manager.load_state_dict({"config": []})
