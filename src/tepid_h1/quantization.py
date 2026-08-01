@@ -32,6 +32,17 @@ class QuantizationConfig:
     axis: int = -1
 
     def __post_init__(self) -> None:
+        if isinstance(self.mode, str):
+            try:
+                object.__setattr__(self, "mode", QuantizationMode(self.mode))
+            except ValueError as error:
+                raise ValueError(f"unsupported quantization mode: {self.mode}") from error
+        elif not isinstance(self.mode, QuantizationMode):
+            raise ValueError("mode must be a QuantizationMode")
+
+        if isinstance(self.axis, bool) or self.axis != -1:
+            raise ValueError("only axis=-1 is supported for quantization")
+
         if self.mode == QuantizationMode.NF4:
             if not self.symmetric:
                 raise ValueError("NF4 requires symmetric quantization")

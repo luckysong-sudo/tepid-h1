@@ -44,6 +44,22 @@ class TestQuantizationConfig:
         assert cfg.mode == QuantizationMode.INT4
         assert cfg.group_size == 64
 
+    def test_string_mode_is_normalized(self) -> None:
+        cfg = QuantizationConfig(mode="int4")  # type: ignore[arg-type]
+        assert cfg.mode == QuantizationMode.INT4
+
+    def test_invalid_mode_rejected(self) -> None:
+        with pytest.raises(ValueError, match="unsupported quantization mode"):
+            QuantizationConfig(mode="int2")  # type: ignore[arg-type]
+
+    def test_unsupported_axis_rejected(self) -> None:
+        with pytest.raises(ValueError, match="axis=-1"):
+            QuantizationConfig(axis=0)
+
+    def test_bool_axis_rejected(self) -> None:
+        with pytest.raises(ValueError, match="axis=-1"):
+            QuantizationConfig(axis=True)  # type: ignore[arg-type]
+
     def test_nf4_group_size_must_be_zero(self) -> None:
         with pytest.raises(ValueError, match="group_size"):
             QuantizationConfig(mode=QuantizationMode.NF4, group_size=128)
