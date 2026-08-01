@@ -16,6 +16,7 @@ from tepid_h1.inference import (
     _suppress_pad_token,
     _top_k_filter,
     _top_p_filter,
+    _validate_generation_token_ids,
     decode_text,
 )
 from tepid_h1.lora import (
@@ -144,6 +145,35 @@ class TestInferenceEngine:
 
         with pytest.raises(RuntimeError, match="CUDA was requested"):
             _resolve_generation_execution(GenerateConfig(device="cuda", dtype="float32"))
+
+    def test_generate_rejects_special_token_ids_outside_vocab(self, engine):
+        input_ids = torch.tensor([[1, 2, 3]])
+
+        with pytest.raises(ValueError, match="pad_token_id"):
+            engine.generate(
+                input_ids,
+                config=GenerateConfig(
+                    max_new_tokens=1,
+                    do_sample=False,
+                    pad_token_id=engine._config.vocab_size,
+                ),
+            )
+        with pytest.raises(ValueError, match="eos_token_id"):
+            engine.generate(
+                input_ids,
+                config=GenerateConfig(
+                    max_new_tokens=1,
+                    do_sample=False,
+                    eos_token_id=-1,
+                ),
+            )
+
+    def test_generation_special_token_ids_must_be_integers(self):
+        with pytest.raises(TypeError, match="eos_token_id"):
+            _validate_generation_token_ids(
+                GenerateConfig(max_new_tokens=1, eos_token_id=True),
+                vocab_size=8,
+            )
 
     def test_greedy_sample_uses_argmax_without_rng(self, engine):
         logits = torch.tensor([[0.0, 10.0, 9.0]])
@@ -299,7 +329,7 @@ class TestInferenceEngine:
             config=GenerateConfig(
                 max_new_tokens=2,
                 do_sample=False,
-                eos_token_id=999,
+                eos_token_id=127,
             ),
         )
         assert generated.shape[1] <= 3 + 2

@@ -147,6 +147,7 @@ class InferenceEngine:
             dtype=_override(gen_config.dtype, kwargs_config.dtype, "dtype"),
         )
 
+        _validate_generation_token_ids(effective_config, self._config.vocab_size)
         device, dtype = _resolve_generation_execution(effective_config)
         self.model = self.model.to(device=device, dtype=dtype)
         input_ids = input_ids.to(device=device)
@@ -382,6 +383,18 @@ def _resolve_generation_execution(config: GenerateConfig) -> tuple[torch.device,
     ):
         raise RuntimeError("bfloat16 was requested but the CUDA device does not support it")
     return torch.device(config.device), _DTYPES[config.dtype]
+
+
+def _validate_generation_token_ids(config: GenerateConfig, vocab_size: int) -> None:
+    """Validate configured special-token IDs against the model vocabulary."""
+    for field in ("pad_token_id", "eos_token_id"):
+        token_id = getattr(config, field)
+        if token_id is None:
+            continue
+        if not isinstance(token_id, int) or isinstance(token_id, bool):
+            raise TypeError(f"{field} must be an integer")
+        if not 0 <= token_id < vocab_size:
+            raise ValueError(f"{field} must be in [0, {vocab_size})")
 
 
 def _top_k_filter(logits: Tensor, top_k: int) -> Tensor:
