@@ -53,6 +53,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "pytest, Ruff, flake8 and mypy are clean locally",
             "version metadata and tracked-artifact hygiene have regression tests",
             "CLI command inventory and key JSON schemas have contract tests",
+            "GPU preflight readiness exit codes are covered by CLI contract tests",
             "top-level and subpackage public APIs have snapshot tests",
             "CI has blocking test, lint and type-check gates",
         ),

@@ -282,6 +282,79 @@ class CLIIntegrationTests(unittest.TestCase):
             {"name", "percent", "evidence", "gaps"},
         )
 
+    def test_gpu_preflight_not_ready_outputs_json_and_nonzero_status(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        preflight_report = {
+            "schema_version": 1,
+            "experiment": "local_gpu_preflight",
+            "config": {"nvidia_smi_path": None},
+            "hardware": {"gpus": []},
+            "torch": {"cuda_available": False},
+            "ready_for_cuda": False,
+            "blockers": ["installed PyTorch build does not include CUDA"],
+            "recommended_actions": ["install a CUDA-enabled PyTorch build"],
+            "interpretation": "not ready",
+        }
+        with patch.object(sys, "argv", ["tepid-h1", "gpu-preflight"]):
+            with patch(
+                "tepid_h1.integrations.build_local_gpu_preflight_report",
+                return_value=preflight_report,
+            ):
+                with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                    result = main()
+                    output = json.loads(mock_stdout.getvalue())
+
+        self.assertEqual(result, 10)
+        self.assertEqual(
+            set(output),
+            {
+                "schema_version",
+                "experiment",
+                "config",
+                "hardware",
+                "torch",
+                "ready_for_cuda",
+                "blockers",
+                "recommended_actions",
+                "interpretation",
+            },
+        )
+        self.assertFalse(output["ready_for_cuda"])
+        self.assertTrue(output["blockers"])
+
+    def test_gpu_preflight_ready_returns_zero_status(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        preflight_report = {
+            "schema_version": 1,
+            "experiment": "local_gpu_preflight",
+            "config": {"nvidia_smi_path": None},
+            "hardware": {"gpus": [{"name": "CUDA GPU"}]},
+            "torch": {"cuda_available": True},
+            "ready_for_cuda": True,
+            "blockers": [],
+            "recommended_actions": ["run tepid-h1 delta-benchmark --device cuda"],
+            "interpretation": "ready",
+        }
+        with patch.object(sys, "argv", ["tepid-h1", "gpu-preflight"]):
+            with patch(
+                "tepid_h1.integrations.build_local_gpu_preflight_report",
+                return_value=preflight_report,
+            ):
+                with patch("sys.stdout", new=StringIO()):
+                    result = main()
+
+        self.assertEqual(result, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
