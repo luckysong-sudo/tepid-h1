@@ -9,6 +9,7 @@ from typing import Any
 import torch
 
 LEGACY_NVIDIA_DRIVER_MAJOR = 450
+SMOKE_ONLY_GPU_MEMORY_MIB = 8192
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ def build_local_gpu_preflight_report(
     hardware_probe = _hardware_probe(nvidia_smi_path)
     torch_probe = _torch_probe()
     blockers = _blockers(hardware_probe, torch_probe)
+    capacity_warnings = _capacity_warnings(hardware_probe)
     recommended_actions = _recommended_actions(hardware_probe, torch_probe, blockers)
     validation_plan = _validation_plan(ready_for_cuda=not blockers)
     return {
@@ -34,6 +36,7 @@ def build_local_gpu_preflight_report(
         "torch": torch_probe,
         "ready_for_cuda": not blockers,
         "blockers": blockers,
+        "capacity_warnings": capacity_warnings,
         "recommended_actions": recommended_actions,
         "validation_plan": validation_plan,
         "interpretation": (
@@ -173,6 +176,18 @@ def _blockers(
     return blockers
 
 
+def _capacity_warnings(hardware_probe: dict[str, Any]) -> list[str]:
+    warnings = []
+    for gpu in hardware_probe["gpus"]:
+        memory_total_mib = gpu.get("memory_total_mib")
+        if isinstance(memory_total_mib, int) and memory_total_mib < SMOKE_ONLY_GPU_MEMORY_MIB:
+            warnings.append(
+                f"{gpu['name']} reports {memory_total_mib} MiB VRAM; use this device "
+                "for smoke and operator-level checks only"
+            )
+    return warnings
+
+
 def _recommended_actions(
     hardware_probe: dict[str, Any],
     torch_probe: dict[str, Any],
@@ -211,6 +226,7 @@ def _validation_plan(*, ready_for_cuda: bool) -> list[dict[str, str]]:
             "status": "passed" if ready_for_cuda else "blocked",
             "command": "tepid-h1 gpu-preflight",
             "purpose": "confirm host GPU visibility and PyTorch CUDA readiness",
+            "scope": "environment preflight",
         },
         {
             "name": "delta_cuda_benchmark",
@@ -220,6 +236,7 @@ def _validation_plan(*, ready_for_cuda: bool) -> list[dict[str, str]]:
                 "--target-device-label local-gpu --length 4 --length 8 --iterations 3"
             ),
             "purpose": "collect CUDA Delta numerical and shape-level throughput evidence",
+            "scope": "operator smoke",
         },
         {
             "name": "moe_cuda_benchmark",
@@ -229,6 +246,7 @@ def _validation_plan(*, ready_for_cuda: bool) -> list[dict[str, str]]:
                 "--length 4 --length 8 --iterations 3"
             ),
             "purpose": "collect CUDA reference MoE routing-load throughput evidence",
+            "scope": "operator smoke",
         },
         {
             "name": "paired_cuda_smoke",
@@ -239,5 +257,6 @@ def _validation_plan(*, ready_for_cuda: bool) -> list[dict[str, str]]:
                 "--inventory configs/data_inventory.example.json"
             ),
             "purpose": "verify end-to-end governed CUDA measurement plumbing",
+            "scope": "training smoke",
         },
     ]

@@ -47,6 +47,8 @@ active project environment reports `torch 2.13.0+cpu`, no CUDA runtime and
 cannot yet execute Tepid-H1 CUDA paths from this virtual environment.
 The preflight marks the 388-series driver as legacy for modern CUDA-enabled PyTorch
 builds and recommends driver alignment before CUDA wheel installation.
+It also reports the MX150 2048 MiB capacity as smoke/operator-only; this host should not
+be used as 350M training or production-kernel performance evidence.
 The current evidence snapshot is recorded in `docs/LOCAL_GPU_EVIDENCE.md`.
 
 CUDA timing synchronizes the device immediately before and after every measured training

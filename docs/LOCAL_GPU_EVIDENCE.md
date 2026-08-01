@@ -21,6 +21,7 @@ Observed host GPU:
 - Driver major: `388`
 - Driver status: legacy for modern CUDA-enabled PyTorch builds
 - Memory: `2048 MiB`
+- Capacity scope: smoke and operator-level validation only
 
 Observed Python runtime:
 
@@ -42,6 +43,8 @@ Required next actions:
 - Rerun `tepid-h1 gpu-preflight` before treating `delta-benchmark --device cuda`,
   `moe-benchmark --device cuda`, or `compare-smoke --device cuda` results as local CUDA
   evidence.
+- Keep local MX150 runs constrained to small smoke/operator checks; do not use this GPU
+  as evidence for M1 350M training, long-window quality, or production kernel readiness.
 
 Post-enablement validation commands:
 

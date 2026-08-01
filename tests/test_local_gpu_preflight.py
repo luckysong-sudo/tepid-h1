@@ -41,6 +41,7 @@ class LocalGPUPreflightTests(unittest.TestCase):
         self.assertEqual(report["hardware"]["gpus"], [])
         self.assertIn("cuda_available", report["torch"])
         self.assertTrue(report["recommended_actions"])
+        self.assertEqual(report["capacity_warnings"], [])
         self.assertEqual(report["validation_plan"][1]["status"], "blocked")
 
     def test_blockers_include_cuda_torch_action(self):
@@ -78,6 +79,17 @@ class LocalGPUPreflightTests(unittest.TestCase):
         self.assertEqual(ready[0]["status"], "passed")
         self.assertEqual(ready[1]["status"], "ready")
         self.assertIn("--device cuda", ready[1]["command"])
+        self.assertEqual(ready[1]["scope"], "operator smoke")
+
+    def test_low_memory_gpu_reports_smoke_only_capacity_warning(self):
+        from tepid_h1.integrations.local_gpu import _capacity_warnings
+
+        warnings = _capacity_warnings(
+            {"gpus": [{"name": "GeForce MX150", "memory_total_mib": 2048}]}
+        )
+
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("smoke and operator-level", warnings[0])
 
 
 if __name__ == "__main__":
