@@ -121,7 +121,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="backend_performance",
-        percent=48,
+        percent=49,
         evidence=(
             "Delta backend validation compares forward, state and gradients",
             "Delta benchmark matrix reports shape-level throughput and qualification status",
@@ -131,6 +131,8 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "MoE routed experts use grouped selected-expert matmuls instead of "
             "per-expert token dispatch",
             "MoE router balance is exposed as a differentiable training signal",
+            "quantized linear layers store quantized weights with recoverable INT8, "
+            "INT4, NF4 and FP8 dequantization contracts",
         ),
         gaps=(
             "Triton/CUDA/Inductor optimized Delta, NSA and MoE kernels are not complete",

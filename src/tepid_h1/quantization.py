@@ -53,6 +53,7 @@ class QuantizedLayer:
     zeros: torch.Tensor | None
     original_dtype: torch.dtype
     quantization_mode: QuantizationMode
+    original_shape: tuple[int, ...]
     dequantized_cache: torch.Tensor | None = None
 
     def to(self, device: torch.device) -> "QuantizedLayer":
@@ -63,6 +64,7 @@ class QuantizedLayer:
             zeros=self.zeros.to(device) if self.zeros is not None else None,
             original_dtype=self.original_dtype,
             quantization_mode=self.quantization_mode,
+            original_shape=self.original_shape,
             dequantized_cache=None,
         )
 
@@ -74,14 +76,15 @@ class QuantizedLayer:
     ) -> "QuantizedLayer":
         weight = linear.weight.detach()
         bias = linear.bias.detach() if linear.bias is not None else None
-        scales, zeros = _quantize_tensor(weight, config)
+        quantized_weight, scales, zeros = _quantize_tensor(weight, config)
         return cls(
-            weight=weight,
+            weight=quantized_weight,
             bias=bias,
             scales=scales,
             zeros=zeros,
             original_dtype=weight.dtype,
             quantization_mode=config.mode,
+            original_shape=tuple(weight.shape),
         )
 
     @property
@@ -91,7 +94,14 @@ class QuantizedLayer:
     def dequantize(self) -> torch.Tensor:
         if self.dequantized_cache is not None:
             return self.dequantized_cache
-        weight = _dequantize_tensor(self.weight, self.scales, self.zeros, self.original_dtype)
+        weight = _dequantize_tensor(
+            self.weight,
+            self.scales,
+            self.zeros,
+            self.original_dtype,
+            self.quantization_mode,
+            self.original_shape,
+        )
         self.dequantized_cache = weight
         return weight
 
@@ -99,7 +109,7 @@ class QuantizedLayer:
 def _quantize_tensor(
     weight: torch.Tensor,
     config: QuantizationConfig,
-) -> tuple[torch.Tensor, torch.Tensor | None]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
     if config.mode == QuantizationMode.INT8:
         return _quantize_int8(weight, config)
     if config.mode == QuantizationMode.INT4:
@@ -110,23 +120,24 @@ def _quantize_tensor(
         return _quantize_fp8(weight, config)
     if config.mode == QuantizationMode.FP16:
         scales = torch.ones((), dtype=weight.dtype)
-        return (weight.to(torch.float16), scales)
+        return weight.to(torch.float16), scales, None
     if config.mode == QuantizationMode.BF16:
         scales = torch.ones((), dtype=weight.dtype)
-        return (weight.to(torch.bfloat16), scales)
+        return weight.to(torch.bfloat16), scales, None
     raise ValueError(f"unsupported quantization mode: {config.mode}")
 
 
 def _quantize_int8(
     weight: torch.Tensor,
     config: QuantizationConfig,
-) -> tuple[torch.Tensor, torch.Tensor | None]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
     if config.group_size == 0:
         q_min, q_max = (-128, 127) if config.symmetric else (0, 255)
         scales = _per_tensor_scale(weight, q_min, q_max, config.symmetric)
         zeros = None if config.symmetric else torch.zeros((), dtype=weight.dtype)
         quantized = _scale_and_quantize(weight, scales, zeros, q_min, q_max)
-        return quantized.to(torch.int8), zeros
+        dtype = torch.int8 if config.symmetric else torch.uint8
+        return quantized.to(dtype), scales, zeros
 
     flat = weight.float()
     shape = flat.shape
@@ -149,20 +160,31 @@ def _quantize_int8(
 
     scales = scales.reshape(*shape[:-1], num_groups, 1)
     zeros = zeros.reshape(*shape[:-1], num_groups, 1) if zeros is not None else None
-    quantized = _scale_and_quantize(flat, scales, zeros, -128 if config.symmetric else 0, 127)
-    return quantized.reshape(*shape[:-1], padded_dim)[..., : shape[-1]].to(torch.int8), zeros
+    quantized = _scale_and_quantize(
+        flat,
+        scales,
+        zeros,
+        -128 if config.symmetric else 0,
+        127 if config.symmetric else 255,
+    )
+    dtype = torch.int8 if config.symmetric else torch.uint8
+    return (
+        quantized.reshape(*shape[:-1], padded_dim)[..., : shape[-1]].to(dtype),
+        scales,
+        zeros,
+    )
 
 
 def _quantize_int4(
     weight: torch.Tensor,
     config: QuantizationConfig,
-) -> tuple[torch.Tensor, torch.Tensor | None]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
     if config.group_size == 0:
         q_min, q_max = (-8, 7) if config.symmetric else (0, 15)
         scales = _per_tensor_scale(weight, q_min, q_max, config.symmetric)
         zeros = None if config.symmetric else torch.zeros((), dtype=weight.dtype)
         quantized = _scale_and_quantize(weight, scales, zeros, q_min, q_max)
-        return quantized.to(torch.int8), zeros
+        return _pack_int4(quantized), scales, zeros
 
     flat = weight.float()
     shape = flat.shape
@@ -185,25 +207,25 @@ def _quantize_int4(
 
     scales = scales.reshape(*shape[:-1], num_groups, 1)
     zeros = zeros.reshape(*shape[:-1], num_groups, 1) if zeros is not None else None
-    quantized = _scale_and_quantize(flat, scales, zeros, -8 if config.symmetric else 0, 7)
+    quantized = _scale_and_quantize(flat, scales, zeros, -8 if config.symmetric else 0, 15)
     packed = _pack_int4(quantized.reshape(*shape[:-1], padded_dim)[..., : shape[-1]])
-    return packed.to(torch.uint8), zeros
+    return packed.to(torch.uint8), scales, zeros
 
 
-def _quantize_nf4(weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def _quantize_nf4(weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, None]:
     flat = weight.float()
-    scales = flat.abs().amax(dim=-1, keepdim=True).clamp(min=1e-12) / 3.0
+    scales = flat.abs().amax().clamp(min=1e-12) / 3.0
     quantized = (flat / scales).round().clamp(-3, 3)
-    return quantized.to(torch.int8), scales
+    return _pack_int4(quantized), scales, None
 
 
 def _quantize_fp8(
     weight: torch.Tensor, config: QuantizationConfig
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, None]:
     flat = weight.float()
     scales = flat.abs().amax(dim=-1, keepdim=True).clamp(min=1e-12) / 448.0
     quantized = (flat / scales).clamp(-448.0, 448.0)
-    return quantized.to(torch.float8_e4m3fn), scales
+    return quantized.to(torch.float8_e4m3fn), scales, None
 
 
 def _per_tensor_scale(
@@ -237,9 +259,53 @@ def _scale_and_quantize(
 
 def _pack_int4(weights: torch.Tensor) -> torch.Tensor:
     weights = weights.to(torch.int8)
-    even = weights[::2] & 0x0F
-    odd = (weights[1::2] & 0x0F) << 4
-    return even | odd
+    if weights.shape[-1] % 2 != 0:
+        weights = torch.nn.functional.pad(weights, (0, 1))
+    low = weights[..., 0::2] & 0x0F
+    high = (weights[..., 1::2] & 0x0F) << 4
+    return (low | high).to(torch.uint8)
+
+
+def _unpack_int4(
+    packed: torch.Tensor,
+    original_shape: tuple[int, ...],
+    *,
+    signed: bool,
+) -> torch.Tensor:
+    packed = packed.to(torch.uint8)
+    low = packed & 0x0F
+    high = (packed >> 4) & 0x0F
+    unpacked = torch.stack((low, high), dim=-1).flatten(-2)
+    unpacked = unpacked[..., : original_shape[-1]].to(torch.int16)
+    if signed:
+        unpacked = torch.where(unpacked >= 8, unpacked - 16, unpacked)
+    return unpacked.reshape(original_shape).to(torch.float32)
+
+
+def _dequantize_grouped(
+    quantized: torch.Tensor,
+    scales: torch.Tensor,
+    zeros: torch.Tensor | None,
+    original_shape: tuple[int, ...],
+) -> torch.Tensor:
+    if scales.ndim != len(original_shape) + 1 or scales.shape[-1] != 1:
+        if zeros is None:
+            return quantized.float() * scales
+        return (quantized.float() - zeros) * scales
+
+    num_groups = scales.shape[-2]
+    group_size = (original_shape[-1] + num_groups - 1) // num_groups
+    padded_dim = num_groups * group_size
+    values = quantized.float()
+    padding = padded_dim - original_shape[-1]
+    if padding > 0:
+        values = torch.nn.functional.pad(values, (0, padding))
+    grouped = values.reshape(*original_shape[:-1], num_groups, group_size)
+    if zeros is None:
+        dequantized = grouped * scales
+    else:
+        dequantized = (grouped - zeros) * scales
+    return dequantized.reshape(*original_shape[:-1], padded_dim)[..., : original_shape[-1]]
 
 
 def _dequantize_tensor(
@@ -247,14 +313,19 @@ def _dequantize_tensor(
     scales: torch.Tensor,
     zeros: torch.Tensor | None,
     original_dtype: torch.dtype,
+    quantization_mode: QuantizationMode,
+    original_shape: tuple[int, ...],
 ) -> torch.Tensor:
-    if quantized.dtype == torch.uint8 and quantized.ndim > 1 and quantized.shape[-1] == 0:
-        return torch.zeros(*quantized.shape[:-1], 0, dtype=original_dtype)
-
-    if zeros is None:
-        values = quantized.float() * scales
+    if quantization_mode in {QuantizationMode.INT4, QuantizationMode.NF4}:
+        quantized_values = _unpack_int4(
+            quantized,
+            original_shape,
+            signed=zeros is None,
+        )
     else:
-        values = (quantized.float() - zeros) * scales
+        quantized_values = quantized.reshape(original_shape)
+
+    values = _dequantize_grouped(quantized_values, scales, zeros, original_shape)
     return values.to(original_dtype)
 
 
@@ -282,21 +353,41 @@ def estimate_quantized_size(
     config: QuantizationConfig,
 ) -> dict[str, int]:
     """Estimate the quantized model size in bytes."""
-    sizes: dict[str, int] = {"weight_bytes": 0, "scale_bytes": 0, "zero_bytes": 0}
+    sizes: dict[str, int] = {
+        "weight_bytes": 0,
+        "scale_bytes": 0,
+        "zero_bytes": 0,
+        "bias_bytes": 0,
+    }
     for name, module in model.named_modules():
         if not isinstance(module, nn.Linear):
             continue
         if any(pattern in name for pattern in {"skip"}):
             continue
-        weight_bytes = module.weight.numel()
+        weight_shape = module.weight.shape
+        weight_numel = module.weight.numel()
+        last_dim = weight_shape[-1]
+        outer_numel = weight_numel // last_dim
         if config.mode in {QuantizationMode.INT8, QuantizationMode.FP8}:
-            weight_bytes *= 1
+            weight_bytes = weight_numel
         elif config.mode in {QuantizationMode.INT4, QuantizationMode.NF4}:
-            weight_bytes = (weight_bytes + 1) // 2
+            weight_bytes = outer_numel * ((last_dim + 1) // 2)
         elif config.mode in {QuantizationMode.FP16, QuantizationMode.BF16}:
-            weight_bytes *= 2
-        bias_bytes = module.bias.numel() if module.bias is not None else 0
-        scale_bytes = max(1, module.weight.shape[-1] // max(config.group_size, 1))
+            weight_bytes = weight_numel * 2
+        else:
+            weight_bytes = weight_numel * module.weight.element_size()
+
+        if config.mode in {QuantizationMode.INT8, QuantizationMode.INT4}:
+            num_groups = max(
+                1,
+                (last_dim + config.group_size - 1) // config.group_size,
+            )
+            scale_count = outer_numel * num_groups
+        elif config.mode in {QuantizationMode.NF4, QuantizationMode.FP16, QuantizationMode.BF16}:
+            scale_count = 1
+        else:
+            scale_count = module.weight.shape[0]
+        scale_bytes = scale_count * module.weight.element_size()
         zero_bytes = (
             scale_bytes
             if not config.symmetric
@@ -306,8 +397,9 @@ def estimate_quantized_size(
         sizes["weight_bytes"] += weight_bytes
         sizes["scale_bytes"] += scale_bytes
         sizes["zero_bytes"] += zero_bytes
-        if bias_bytes > 0:
-            sizes["bias_bytes"] = sizes.get("bias_bytes", 0) + bias_bytes
+        if module.bias is not None:
+            sizes["bias_bytes"] += module.bias.numel() * module.bias.element_size()
+    sizes["total_bytes"] = sum(sizes.values())
     return sizes
 
 
@@ -361,6 +453,11 @@ def save_quantized_model(
     for name, quantized in quantized_layers.items():
         layer_artifact: dict[str, Any] = {
             "name": name,
+            "weight": quantized.weight.detach(),
+            "bias": quantized.bias.detach() if quantized.bias is not None else None,
+            "scales": quantized.scales.detach(),
+            "zeros": quantized.zeros.detach() if quantized.zeros is not None else None,
+            "original_shape": quantized.original_shape,
             "original_dtype": str(quantized.original_dtype),
             "quantization_mode": quantized.quantization_mode.value,
         }

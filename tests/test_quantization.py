@@ -62,9 +62,12 @@ class TestQuantizedLayer:
         cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
         ql = QuantizedLayer.from_linear(linear, cfg)
         assert ql.weight.shape == (4, 8)
+        assert ql.weight.dtype == torch.int8
+        assert ql.scales.dtype == torch.float32
         assert ql.bias is not None
         assert ql.original_dtype == torch.float32
         assert ql.quantization_mode == QuantizationMode.INT8
+        assert ql.original_shape == (4, 8)
 
     def test_from_linear_no_bias(self) -> None:
         linear = nn.Linear(8, 4, bias=False)
@@ -79,6 +82,44 @@ class TestQuantizedLayer:
         deq = ql.dequantize()
         assert deq.shape == (4, 8)
         assert deq.dtype == torch.float32
+        assert torch.allclose(deq, linear.weight, atol=ql.scales.max().item())
+
+    def test_quantized_weight_does_not_store_original_float_weight(self) -> None:
+        linear = nn.Linear(8, 4, bias=True)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        ql = QuantizedLayer.from_linear(linear, cfg)
+
+        assert ql.weight.dtype != linear.weight.dtype
+        assert ql.weight.data_ptr() != linear.weight.data_ptr()
+
+    def test_int8_asymmetric_uses_unsigned_storage(self) -> None:
+        linear = nn.Linear(8, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=False)
+        ql = QuantizedLayer.from_linear(linear, cfg)
+
+        assert ql.weight.dtype == torch.uint8
+        assert ql.zeros is not None
+        assert torch.allclose(ql.dequantize(), linear.weight, atol=ql.scales.max().item())
+
+    def test_int4_packs_last_dimension_and_dequantizes(self) -> None:
+        linear = nn.Linear(7, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT4, group_size=4, symmetric=True)
+        ql = QuantizedLayer.from_linear(linear, cfg)
+
+        assert ql.weight.dtype == torch.uint8
+        assert ql.weight.shape == (4, 4)
+        assert ql.dequantize().shape == linear.weight.shape
+        assert torch.allclose(ql.dequantize(), linear.weight, atol=ql.scales.max().item())
+
+    def test_nf4_packs_weights_and_dequantizes(self) -> None:
+        linear = nn.Linear(7, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.NF4, group_size=0)
+        ql = QuantizedLayer.from_linear(linear, cfg)
+
+        assert ql.weight.dtype == torch.uint8
+        assert ql.weight.shape == (4, 4)
+        assert ql.zeros is None
+        assert ql.dequantize().shape == linear.weight.shape
 
     def test_dequantize_cached(self) -> None:
         linear = nn.Linear(8, 4, bias=True)
@@ -131,6 +172,22 @@ class TestEstimateQuantizedSize:
         sizes = estimate_quantized_size(model, cfg)
         assert sizes["weight_bytes"] > 0
 
+    def test_estimate_uses_bytes_for_bias_and_totals(self) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, group_size=4)
+        sizes = estimate_quantized_size(model, cfg)
+        assert sizes["weight_bytes"] == 32
+        assert sizes["scale_bytes"] == 32
+        assert sizes["bias_bytes"] == 16
+        assert sizes["total_bytes"] == 80
+
+    def test_estimate_int4_counts_per_row_padding(self) -> None:
+        model = nn.Linear(7, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT4, group_size=4)
+        sizes = estimate_quantized_size(model, cfg)
+
+        assert sizes["weight_bytes"] == 16
+
 
 class TestApplyQuantizedModel:
     def test_apply(self) -> None:
@@ -151,3 +208,7 @@ class TestSaveQuantizedModel:
         assert path.exists()
         assert "schema_version" in artifacts
         assert "quantized_layers" in artifacts
+        layer = artifacts["quantized_layers"][""]
+        assert layer["weight"].dtype == torch.int8
+        assert layer["scales"].dtype == torch.float32
+        assert layer["original_shape"] == (4, 8)
