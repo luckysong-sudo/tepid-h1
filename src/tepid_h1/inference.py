@@ -38,8 +38,8 @@ class GenerateConfig:
             raise ValueError("temperature must be positive")
         if not 0.0 <= self.top_p <= 1.0:
             raise ValueError("top_p must be in [0, 1]")
-        if not 0 <= self.top_k < self.max_new_tokens:
-            raise ValueError("top_k must be non-negative and less than max_new_tokens")
+        if self.top_k < 0:
+            raise ValueError("top_k must be non-negative")
         if not 1.0 <= self.repetition_penalty <= 2.0:
             raise ValueError("repetition_penalty must be in [1.0, 2.0]")
         if self.num_return_sequences <= 0:
@@ -303,7 +303,10 @@ def _top_k_filter(logits: Tensor, top_k: int) -> Tensor:
     """Zero out logits beyond top-k."""
     if top_k <= 0:
         return logits
-    indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+    effective_top_k = min(top_k, logits.shape[-1])
+    if effective_top_k == logits.shape[-1]:
+        return logits
+    indices_to_remove = logits < torch.topk(logits, effective_top_k)[0][..., -1, None]
     filtered = logits.clone()
     filtered[indices_to_remove] = float("-inf")
     return filtered
@@ -317,6 +320,12 @@ def _top_p_filter(logits: Tensor, top_p: float) -> Tensor:
     cumulative_probs = torch.cumsum(torch.softmax(sorted_logits, dim=-1), dim=-1)
     indices_to_remove = cumulative_probs > top_p
     indices_to_remove[..., 0] = False
+    sorted_indices_to_remove = indices_to_remove
+    indices_to_remove = torch.zeros_like(sorted_indices_to_remove).scatter(
+        dim=-1,
+        index=sorted_indices,
+        src=sorted_indices_to_remove,
+    )
     filtered_logits = logits.clone()
     filtered_logits[indices_to_remove] = float("-inf")
     return filtered_logits

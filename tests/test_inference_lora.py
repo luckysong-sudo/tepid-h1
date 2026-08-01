@@ -9,6 +9,8 @@ from tepid_h1.inference import (
     GenerateConfig,
     InferenceEngine,
     _apply_repetition_penalty,
+    _top_k_filter,
+    _top_p_filter,
     decode_text,
 )
 from tepid_h1.lora import (
@@ -94,6 +96,11 @@ class TestInferenceEngine:
 
         assert metadata["do_sample"] is False
 
+    def test_generate_config_allows_top_k_larger_than_generation_length(self):
+        config = GenerateConfig(max_new_tokens=2, top_k=50)
+
+        assert config.top_k == 50
+
     def test_greedy_sample_uses_argmax_without_rng(self, engine):
         logits = torch.tensor([[0.0, 10.0, 9.0]])
 
@@ -124,6 +131,22 @@ class TestInferenceEngine:
 
         assert torch.equal(first, torch.tensor([[1]]))
         assert torch.equal(first, second)
+
+    def test_top_k_filter_clamps_to_vocab_size(self):
+        logits = torch.tensor([[1.0, 2.0, 3.0]])
+
+        filtered = _top_k_filter(logits, top_k=50)
+
+        assert torch.equal(filtered, logits)
+
+    def test_top_p_filter_masks_original_token_indices(self):
+        logits = torch.tensor([[1.0, 3.0, 2.0]])
+
+        filtered = _top_p_filter(logits, top_p=0.75)
+
+        assert torch.isneginf(filtered[0, 0])
+        assert torch.equal(filtered[0, 1], logits[0, 1])
+        assert torch.isneginf(filtered[0, 2])
 
     def test_sampling_mode_uses_multinomial(self, engine):
         logits = torch.tensor([[0.0, 0.0, 10.0]])
