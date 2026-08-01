@@ -51,6 +51,7 @@ from .modeling import (
 )
 from .modeling.cache import AttentionCache
 from .quantization import QuantizationConfig
+from .stage_gates import StageGate, StageGateReport, audit_stage_gates, load_stage_gates
 
 __all__ = [
     "AgentRuntime",
@@ -89,6 +90,8 @@ __all__ = [
     "RuntimeState",
     "RoutedMoEReference",
     "SequenceMixer",
+    "StageGate",
+    "StageGateReport",
     "SwiGLU",
     "ToolCall",
     "ToolResult",
@@ -104,10 +107,12 @@ __all__ = [
     "TransformerBaselineConfig",
     "TransformerBaselineModel",
     "apply_gradient_checkpointing",
+    "audit_stage_gates",
     "baseline_parameter_estimate",
     "comparison_report",
     "estimate_memory_savings",
     "hybrid_parameter_estimate",
+    "load_stage_gates",
     "log_training_step",
     "setup_logging",
     "wrap_layers_with_checkpointing",

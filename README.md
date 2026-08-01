@@ -39,6 +39,7 @@ Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**�
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'
 PYTHONPATH=src python3 -m tepid_h1.cli plan --variant reference
+PYTHONPATH=src python3 -m tepid_h1.cli stage-gates
 ```
 
 安装 PyTorch 后运行模型测试：
@@ -60,6 +61,12 @@ M0 数据资产审计：
 
 ```bash
 PYTHONPATH=src python -m tepid_h1.cli data-audit configs/data_inventory.example.json
+```
+
+阶段门配置审计：
+
+```bash
+PYTHONPATH=src python -m tepid_h1.cli stage-gates configs/stage_gates.json
 ```
 
 真实 Tokenizer 对比的输入与命令约定见 `docs/M0_DATA_GOVERNANCE.md`。

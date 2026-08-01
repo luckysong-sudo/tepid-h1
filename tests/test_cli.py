@@ -25,6 +25,14 @@ class CLIParserTests(unittest.TestCase):
             self.assertEqual(args.command, "data-audit")
             self.assertEqual(Path(args.inventory), Path(f.name))
 
+    def test_stage_gates_command(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["stage-gates"])
+        self.assertEqual(args.command, "stage-gates")
+        self.assertEqual(Path(args.config), Path("configs/stage_gates.json"))
+
     def test_decontaminate_command(self):
         from tepid_h1.cli import build_parser
 
@@ -124,6 +132,23 @@ class CLIIntegrationTests(unittest.TestCase):
         parser = build_parser()
         with self.assertRaises(SystemExit):
             parser.parse_args(["data-audit"])
+
+    def test_stage_gates_command_outputs_json(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        with patch.object(sys, "argv", ["tepid-h1", "stage-gates"]):
+            with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                result = main()
+                self.assertEqual(result, 0)
+                output = mock_stdout.getvalue()
+                report = json.loads(output)
+
+        self.assertTrue(report["passed"])
+        self.assertEqual(len(report["gates"]), 6)
 
 
 if __name__ == "__main__":

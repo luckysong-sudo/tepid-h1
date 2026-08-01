@@ -18,6 +18,7 @@ All notable changes to the Tepid-H1 project will be documented in this file.
 - Restored flake8 and mypy as blocking CI gates after clearing the current baseline.
 - Fixed NF4 quantization validation order and removed an undefined helper call.
 - Added project hygiene regression tests for version metadata and tracked local artifacts.
+- Added machine-readable M0-M5 stage-gate auditing with CLI and tests.
 - Removed accidental local installer/null artifacts from the tracked tree.
 - Type annotation for `attn_bias` parameter in `model.py`
 - Removed redundant `num_kv_heads` parameter from `TepidH1CausalLM`

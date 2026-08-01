@@ -29,6 +29,7 @@ from .evaluation import (
     score_retrieval,
     write_retrieval_suite,
 )
+from .stage_gates import audit_stage_gates, load_stage_gates
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,6 +42,17 @@ def build_parser() -> argparse.ArgumentParser:
     audit = subparsers.add_parser("data-audit", help="audit an M0 data inventory")
     audit.add_argument("inventory", type=Path)
     audit.add_argument("--report", type=Path)
+    stage_gates = subparsers.add_parser(
+        "stage-gates",
+        help="audit the M0-M5 stage-gate configuration",
+    )
+    stage_gates.add_argument(
+        "config",
+        type=Path,
+        nargs="?",
+        default=Path("configs/stage_gates.json"),
+    )
+    stage_gates.add_argument("--report", type=Path)
     decontamination = subparsers.add_parser(
         "decontaminate",
         help="compare training JSONL against a held-out benchmark JSONL",
@@ -239,6 +251,10 @@ def main() -> int:
         audit_report = audit_inventory(load_inventory(args.inventory))
         _write_payload(audit_report.to_dict(), args.report)
         return 0 if audit_report.passed else 2
+    if args.command == "stage-gates":
+        stage_gate_report = audit_stage_gates(load_stage_gates(args.config))
+        _write_payload(stage_gate_report.to_dict(), args.report)
+        return 0 if stage_gate_report.passed else 8
     if args.command == "decontaminate":
         decontamination_report = compare_corpora(
             load_text_records(args.training),
