@@ -53,12 +53,10 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "pytest, Ruff, flake8 and mypy are clean locally",
             "version metadata and tracked-artifact hygiene have regression tests",
             "CLI command inventory and key JSON schemas have contract tests",
+            "top-level and subpackage public APIs have snapshot tests",
             "CI has blocking test, lint and type-check gates",
         ),
-        gaps=(
-            "CI matrix results still need to be observed after merge",
-            "module-level non-top-level APIs are not yet snapshot-tested",
-        ),
+        gaps=("CI matrix results still need to be observed after merge",),
     ),
     StatusDimension(
         name="reference_architecture",
@@ -138,7 +136,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
         evidence=(
             "architecture, training, governance, retrieval and roadmap docs exist",
             "stage-gate and project-hygiene checks are now machine-readable",
-            "top-level public API exports are protected by a snapshot test",
+            "top-level and subpackage public API exports are protected by snapshot tests",
         ),
         gaps=(
             "API reference documentation is still incomplete",

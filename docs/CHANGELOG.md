@@ -22,6 +22,7 @@ All notable changes to the Tepid-H1 project will be documented in this file.
 - Added machine-readable multi-dimensional project completion reporting.
 - Added top-level public API snapshot coverage.
 - Added CLI command inventory and JSON schema contract coverage.
+- Added subpackage public API snapshot coverage.
 - Removed accidental local installer/null artifacts from the tracked tree.
 - Type annotation for `attn_bias` parameter in `model.py`
 - Removed redundant `num_kv_heads` parameter from `TepidH1CausalLM`
