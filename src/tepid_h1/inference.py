@@ -181,7 +181,7 @@ class InferenceEngine:
                 ),
             )
 
-        next_token_ids = input_ids[:, -1:]
+        next_logits = output.logits[:, -1, :]
         generated_ids = input_ids.clone()
         delta_states = _extract_delta_states(output)
         attention_states = _extract_attention_states(output)
@@ -191,8 +191,9 @@ class InferenceEngine:
             generated_ids = generated_ids.repeat_interleave(
                 effective_config.num_return_sequences, dim=0
             )
-            next_token_ids = next_token_ids.repeat_interleave(
-                effective_config.num_return_sequences, dim=0
+            next_logits = next_logits.repeat_interleave(
+                effective_config.num_return_sequences,
+                dim=0,
             )
             if delta_states is not None:
                 delta_states = cast(
@@ -210,19 +211,6 @@ class InferenceEngine:
 
         # Autoregressive decoding
         for step in range(effective_config.max_new_tokens):
-            # Ensure states are tuples (or None) for model forward
-            ds = tuple(delta_states) if delta_states is not None else None
-            ats = tuple(attention_states) if attention_states is not None else None
-            with torch.no_grad():
-                cached_output = self.model(
-                    next_token_ids,
-                    delta_states=ds,
-                    attention_states=ats,
-                )
-            next_logits = cached_output.logits[:, -1, :]
-            delta_states = _extract_delta_states(cached_output)
-            attention_states = _extract_attention_states(cached_output)
-
             next_token_ids = self._sample(
                 next_logits,
                 token_history=generated_ids,
@@ -250,6 +238,21 @@ class InferenceEngine:
 
             if finished_sequences.all():
                 break
+            if step == effective_config.max_new_tokens - 1:
+                break
+
+            # Advance recurrent/KV state with the token just generated.
+            ds = tuple(delta_states) if delta_states is not None else None
+            ats = tuple(attention_states) if attention_states is not None else None
+            with torch.no_grad():
+                cached_output = self.model(
+                    next_token_ids,
+                    delta_states=ds,
+                    attention_states=ats,
+                )
+            next_logits = cached_output.logits[:, -1, :]
+            delta_states = _extract_delta_states(cached_output)
+            attention_states = _extract_attention_states(cached_output)
 
         metadata = {
             "input_length": original_length,

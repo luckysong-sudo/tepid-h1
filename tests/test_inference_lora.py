@@ -295,7 +295,7 @@ class TestInferenceEngine:
             def __call__(self, input_ids, delta_states=None, attention_states=None):
                 self.calls += 1
                 logits = torch.full((input_ids.shape[0], input_ids.shape[1], 8), -100.0)
-                if self.calls == 2:
+                if self.calls == 1:
                     logits[0, -1, 4] = 10.0
                     logits[1, -1, 5] = 10.0
                 else:
@@ -322,6 +322,7 @@ class TestInferenceEngine:
         assert torch.equal(generated[0], torch.tensor([1, 4, 0, 0]))
         assert torch.equal(generated[1], torch.tensor([2, 5, 7, 7]))
         assert metadata["new_tokens"] == 3
+        assert engine.model.calls == 3
         assert engine.model.device == torch.device("cpu")
         assert engine.model.dtype == torch.float32
 
