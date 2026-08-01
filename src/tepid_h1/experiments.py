@@ -168,9 +168,7 @@ def run_paired_smoke(
     model_config = TepidH1Config.smoke()
     baseline_config = TransformerBaselineConfig.active_parameter_matched(model_config)
     batches = (
-        corpus.batches
-        if corpus is not None
-        else _generate_batches(config, model_config.vocab_size)
+        corpus.batches if corpus is not None else _generate_batches(config, model_config.vocab_size)
     )
     device, dtype = _resolve_execution(config)
     execution_batches = tuple(batch.to(device=device) for batch in batches)
@@ -193,9 +191,7 @@ def run_paired_smoke(
     governed = corpus is not None
     data: dict[str, Any] = {
         "kind": "governed_fixed_token_corpus" if governed else "deterministic_random_tokens",
-        "batch_sha256": (
-            corpus.batch_sha256 if corpus is not None else _batch_digest(batches)
-        ),
+        "batch_sha256": (corpus.batch_sha256 if corpus is not None else _batch_digest(batches)),
         "batches": len(batches),
         "tokens_per_model_per_trial": trained_tokens,
         "tokens_per_model_total": trained_tokens * config.trials,
@@ -214,9 +210,7 @@ def run_paired_smoke(
 
     return {
         "schema_version": 2,
-        "experiment": (
-            "paired_governed_corpus_smoke" if governed else "paired_random_token_smoke"
-        ),
+        "experiment": ("paired_governed_corpus_smoke" if governed else "paired_random_token_smoke"),
         "interpretation": (
             "Governed fixed-corpus engineering comparison; repeated tiny-CPU results still "
             "do not establish language quality or target-hardware performance."
@@ -257,9 +251,7 @@ def run_paired_smoke(
                 "actual": trials[0]["hybrid"]["actual_parameters"],
                 "estimated_active": hybrid_estimate["active_parameters"],
                 "estimated_physical": hybrid_estimate["physical_parameters"],
-                "estimate_matches_actual": trials[0]["hybrid"][
-                    "parameter_estimate_matches_actual"
-                ],
+                "estimate_matches_actual": trials[0]["hybrid"]["parameter_estimate_matches_actual"],
             },
             "baseline": {
                 "actual": trials[0]["baseline"]["actual_parameters"],
@@ -290,13 +282,9 @@ def _validate_corpus_record(
             raise ValueError(f"corpus line {line_number} requires non-empty string {field!r}")
     token_ids = item.get("token_ids")
     if not isinstance(token_ids, list) or len(token_ids) < sequence_length:
-        raise ValueError(
-            f"corpus line {line_number} requires at least {sequence_length} token_ids"
-        )
+        raise ValueError(f"corpus line {line_number} requires at least {sequence_length} token_ids")
     if not all(
-        isinstance(token_id, int)
-        and not isinstance(token_id, bool)
-        and 0 <= token_id < vocab_size
+        isinstance(token_id, int) and not isinstance(token_id, bool) and 0 <= token_id < vocab_size
         for token_id in token_ids
     ):
         raise ValueError(
@@ -312,16 +300,12 @@ def _records_to_batches(
 ) -> tuple[Tensor, ...]:
     required_records = config.steps * config.batch_size
     start_record = start_step * config.batch_size
-    selected = [
-        records[(start_record + index) % len(records)] for index in range(required_records)
-    ]
+    selected = [records[(start_record + index) % len(records)] for index in range(required_records)]
     return tuple(
         torch.tensor(
             [
                 record["token_ids"][: config.sequence_length]
-                for record in selected[
-                    step * config.batch_size : (step + 1) * config.batch_size
-                ]
+                for record in selected[step * config.batch_size : (step + 1) * config.batch_size]
             ],
             dtype=torch.long,
         )
@@ -355,7 +339,7 @@ def _run_trial(
     models: dict[str, TrainableCausalLM] = {"hybrid": hybrid, "baseline": baseline}
     _warm_up(models, batches[0])
 
-    measurements: dict[str, list[dict[str, float | int]]] = {
+    measurements: dict[str, list[dict[str, Any]]] = {
         "hybrid": [],
         "baseline": [],
     }
@@ -378,9 +362,7 @@ def _run_trial(
             if device.type == "cuda":
                 torch.cuda.synchronize(device)
             elapsed = time.perf_counter() - started
-            peak_memory = (
-                torch.cuda.max_memory_allocated(device) if device.type == "cuda" else None
-            )
+            peak_memory = torch.cuda.max_memory_allocated(device) if device.type == "cuda" else None
             measurements[name].append(
                 {
                     **asdict(metrics),
@@ -479,9 +461,7 @@ def _aggregate_model(summaries: list[dict[str, Any]]) -> dict[str, Any]:
         "initial_loss": _summary_statistics(
             [float(summary["initial_loss"]) for summary in summaries]
         ),
-        "final_loss": _summary_statistics(
-            [float(summary["final_loss"]) for summary in summaries]
-        ),
+        "final_loss": _summary_statistics([float(summary["final_loss"]) for summary in summaries]),
         "loss_change": _summary_statistics(
             [float(summary["loss_change"]) for summary in summaries]
         ),

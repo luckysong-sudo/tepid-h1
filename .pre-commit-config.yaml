@@ -11,6 +11,8 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [types-setuptools]
+        args: [src/tepid_h1, --ignore-missing-imports]
+        pass_filenames: false
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0

@@ -218,10 +218,7 @@ class GQAAttentionReference(nn.Module):
             1.0
             / (
                 self.rotary_theta
-                ** (
-                    torch.arange(0, self.head_dim, 2, dtype=torch.float32)
-                    / self.head_dim
-                )
+                ** (torch.arange(0, self.head_dim, 2, dtype=torch.float32) / self.head_dim)
             ),
             persistent=False,
         )
@@ -244,7 +241,10 @@ class GQAAttentionReference(nn.Module):
             device=x.device,
             dtype=torch.float32,
         )
-        angles = torch.outer(positions, self.rotary_inv_frequency.float())
+        inv_frequency = self.rotary_inv_frequency
+        if not isinstance(inv_frequency, Tensor):
+            raise TypeError("rotary_inv_frequency buffer must be a tensor")
+        angles = torch.outer(positions, inv_frequency.float())
         cosine = angles.cos()[None, None].to(dtype=x.dtype)
         sine = angles.sin()[None, None].to(dtype=x.dtype)
         even = x[..., 0::2]

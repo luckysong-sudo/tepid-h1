@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from .protocols import (
+    AgentAction,
     AgentModel,
     ContextBuilder,
     FinalAnswer,
     ModelValidationError,
-    PolicyDecision,
     PolicyEngine,
     RuntimeState,
     Telemetry,
@@ -21,17 +21,20 @@ from .protocols import (
 
 class BudgetExceeded(RuntimeError):
     """Raised when the agent exhausts its step budget."""
+
     pass
 
 
 class RetryExhausted(RuntimeError):
     """Raised when an operation exceeds its retry limit."""
+
     pass
 
 
 @dataclass(frozen=True)
 class RuntimeDependencies:
     """Dependencies required to run the agent loop."""
+
     model: AgentModel
     context_builder: ContextBuilder
     policy: PolicyEngine
@@ -68,9 +71,7 @@ class AgentRuntime:
             try:
                 action = self.dependencies.model.generate_action(context)
             except Exception as exc:
-                raise ModelValidationError(
-                    f"model generated invalid action: {exc!r}"
-                ) from exc
+                raise ModelValidationError(f"model generated invalid action: {exc!r}") from exc
 
             state.record_action(action)
 
@@ -96,15 +97,11 @@ class AgentRuntime:
 
             result = self.dependencies.tools.execute(action)
             if result.call_id != action.call_id:
-                raise ModelValidationError(
-                    "tool result call_id does not match the requested call"
-                )
+                raise ModelValidationError("tool result call_id does not match the requested call")
             state.record_observation(result)
             self._record(state, action, result)
 
-        raise BudgetExceeded(
-            f"agent exhausted {max_steps} steps without a verified final answer"
-        )
+        raise BudgetExceeded(f"agent exhausted {max_steps} steps without a verified final answer")
 
     def _run_with_retry(
         self, operation: Callable[..., object], *args: object, **kwargs: object
@@ -119,9 +116,9 @@ class AgentRuntime:
                     raise RetryExhausted(
                         f"operation failed after {self._max_retries + 1} attempts: {exc!r}"
                     ) from exc
-                time.sleep(self._retry_backoff * (2 ** attempt))
+                time.sleep(self._retry_backoff * (2**attempt))
+        raise RetryExhausted("operation failed without producing a result")
 
-    def _record(self, state: RuntimeState, action: object, result: object) -> None:
+    def _record(self, state: RuntimeState, action: AgentAction, result: object) -> None:
         if self.dependencies.telemetry is not None:
             self.dependencies.telemetry.record(state, action, result)
-

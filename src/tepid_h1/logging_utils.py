@@ -1,4 +1,5 @@
 """Structured logging utilities for the framework."""
+
 from __future__ import annotations
 
 import json
@@ -42,9 +43,7 @@ class _TextFormatter(logging.Formatter):
 class _JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         log_entry: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(
-                record.created, tz=timezone.utc
-            ).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
             "level": record.levelname,
             "message": record.getMessage(),
         }
@@ -61,7 +60,6 @@ def log_training_step(
     learning_rate: float,
 ) -> None:
     """Log a training step with structured data."""
-    extra = getattr(logging, "Extra", None)
     record = logger.makeRecord(
         logger.name,
         logging.INFO,

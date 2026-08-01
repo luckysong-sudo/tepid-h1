@@ -1,4 +1,5 @@
 """Model export utilities for production deployment."""
+
 from __future__ import annotations
 
 import json
@@ -67,7 +68,7 @@ class ModelExporter:
 
         torch.onnx.export(
             self.model,
-            dummy_input,
+            (dummy_input,),
             str(output_path),
             opset_version=opset_version,
             input_names=["input_ids"],
@@ -104,7 +105,9 @@ class ModelExporter:
 
         # Save config separately
         config_path = output_path.parent / "config.json"
-        config_dict = asdict(self.config) if hasattr(self.config, "__dataclass_fields__") else self.config
+        config_dict = (
+            asdict(self.config) if hasattr(self.config, "__dataclass_fields__") else self.config
+        )
         if metadata:
             config_dict.update(metadata)
         config_path.write_text(json.dumps(config_dict, indent=2, ensure_ascii=False))
@@ -133,17 +136,11 @@ class ModelExporter:
 
         for fmt in formats:
             if fmt == "torchscript":
-                exports["torchscript"] = self.export_torchscript(
-                    output_dir / "model.pt"
-                )
+                exports["torchscript"] = self.export_torchscript(output_dir / "model.pt")
             elif fmt == "onnx":
-                exports["onnx"] = self.export_onnx(
-                    output_dir / "model.onnx"
-                )
+                exports["onnx"] = self.export_onnx(output_dir / "model.onnx")
             elif fmt == "safetensors":
-                exports["safetensors"] = self.export_safe_tensor(
-                    output_dir / "model.safetensors"
-                )
+                exports["safetensors"] = self.export_safe_tensor(output_dir / "model.safetensors")
 
         return exports
 

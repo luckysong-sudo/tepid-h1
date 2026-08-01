@@ -51,7 +51,9 @@ def load_paired_corpus_records(path: str | Path) -> list[dict[str, Any]]:
                 raise TypeError(f"line {line_number} of {path} must be a JSON object")
             for field_name in ("id", "source_id", "domain", "token_ids"):
                 if field_name not in item:
-                    raise ValueError(f"line {line_number} of {path} is missing field {field_name!r}")
+                    raise ValueError(
+                        f"line {line_number} of {path} is missing field {field_name!r}"
+                    )
             records.append(item)
     return records
 
@@ -83,9 +85,7 @@ def summarize_paired_corpus(path: str | Path) -> CorpusStats:
         sequence_lengths.append(len(token_ids))
         for token_id in token_ids:
             if not isinstance(token_id, int) or isinstance(token_id, bool):
-                raise TypeError(
-                    f"record {record_id!r} contains non-integer token id: {token_id!r}"
-                )
+                raise TypeError(f"record {record_id!r} contains non-integer token id: {token_id!r}")
             token_counter[token_id] += 1
             if token_min is None or token_id < token_min:
                 token_min = token_id

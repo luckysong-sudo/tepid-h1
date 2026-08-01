@@ -1,12 +1,12 @@
 """KV-cache inference optimization for Tepid-H1 model."""
+
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, cast
 
 import torch
-from torch import Tensor, nn
+from torch import Tensor
 
 
 @dataclass
@@ -29,7 +29,9 @@ class AttentionCache:
             self.dtype = self.k_cache.dtype
             self.seq_len = self.k_cache.shape[-2]
 
-    def to(self, device: torch.device | None = None, dtype: torch.dtype | None = None) -> "AttentionCache":
+    def to(
+        self, device: torch.device | None = None, dtype: torch.dtype | None = None
+    ) -> "AttentionCache":
         if self.k_cache is None:
             return self
         new_device = device or self.device
@@ -37,6 +39,8 @@ class AttentionCache:
         if new_device == self.device and new_dtype == self.dtype:
             return self
         self.k_cache = self.k_cache.to(device=new_device, dtype=new_dtype)
+        if self.v_cache is None:
+            raise ValueError("v_cache requires k_cache to be provided")
         self.v_cache = self.v_cache.to(device=new_device, dtype=new_dtype)
         self.device = new_device
         self.dtype = new_dtype
@@ -76,10 +80,14 @@ class AttentionCache:
             k_new = k_new[:, :, shift:]
             v_new = v_new[:, :, shift:]
             if k_new.shape[-2] == 0 or v_new.shape[-2] == 0:
+                if self.v_cache is None:
+                    raise ValueError("v_cache requires k_cache to be provided")
                 return self.k_cache, self.v_cache
 
         prev_k = self.k_cache
         prev_v = self.v_cache
+        if prev_v is None:
+            raise ValueError("v_cache requires k_cache to be provided")
         new_k = torch.cat([prev_k, k_new], dim=-2)
         new_v = torch.cat([prev_v, v_new], dim=-2)
         self.k_cache = new_k
@@ -122,10 +130,10 @@ class AttentionCache:
             raise ValueError("cached key and value sequences must have equal length")
         self.seq_len = seq_len
         self.device = torch.device(device_str)
-        self.dtype = torch.tensor(0.0, dtype={
+        self.dtype = {
             "float32": torch.float32,
             "float16": torch.float16,
             "bfloat16": torch.bfloat16,
-        }.get(dtype_str, torch.float32))
-        self.k_cache = k_cache
-        self.v_cache = v_cache
+        }.get(dtype_str, torch.float32)
+        self.k_cache = cast(Tensor | None, k_cache)
+        self.v_cache = cast(Tensor | None, v_cache)

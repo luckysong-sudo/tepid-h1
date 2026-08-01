@@ -79,8 +79,6 @@ class TestAgentRuntimeErrors:
 
     def test_model_exception_raises_model_validation_error(self):
         """Model exceptions should be wrapped as ModelValidationError."""
-        called_with = []
-
         class FailingModel:
             def generate_action(self, context):
                 raise RuntimeError("model crashed")
@@ -101,19 +99,22 @@ class TestAgentRuntimeErrors:
             def verify_final(self, state, answer):
                 return PolicyDecision(allowed=True)
 
-        runtime = AgentRuntime(RuntimeDependencies(
-            model=FailingModel(),
-            context_builder=StubContextBuilder(),
-            policy=StubPolicy(),
-            tools=StubTools(),
-            verifier=StubVerifier(),
-        ))
+        runtime = AgentRuntime(
+            RuntimeDependencies(
+                model=FailingModel(),
+                context_builder=StubContextBuilder(),
+                policy=StubPolicy(),
+                tools=StubTools(),
+                verifier=StubVerifier(),
+            )
+        )
 
         with pytest.raises(ModelValidationError, match="model generated invalid action"):
             runtime.run("test task")
 
     def test_invalid_action_type_raises_model_validation_error(self):
         """Model returning invalid action type should raise ModelValidationError."""
+
         class BadModel:
             def generate_action(self, context):
                 return "not a valid action"  # type: ignore[return-value]
@@ -134,13 +135,15 @@ class TestAgentRuntimeErrors:
             def verify_final(self, state, answer):
                 return PolicyDecision(allowed=True)
 
-        runtime = AgentRuntime(RuntimeDependencies(
-            model=BadModel(),
-            context_builder=StubContextBuilder(),
-            policy=StubPolicy(),
-            tools=StubTools(),
-            verifier=StubVerifier(),
-        ))
+        runtime = AgentRuntime(
+            RuntimeDependencies(
+                model=BadModel(),
+                context_builder=StubContextBuilder(),
+                policy=StubPolicy(),
+                tools=StubTools(),
+                verifier=StubVerifier(),
+            )
+        )
 
         with pytest.raises(ModelValidationError):
             runtime.run("test task")
@@ -173,13 +176,15 @@ class TestAgentRuntimeErrors:
             def verify_final(self, state, answer):
                 return PolicyDecision(allowed=True)
 
-        runtime = AgentRuntime(RuntimeDependencies(
-            model=CounterModel(),
-            context_builder=StubContextBuilder(),
-            policy=StubPolicy(),
-            tools=StubTools(),
-            verifier=StubVerifier(),
-        ))
+        runtime = AgentRuntime(
+            RuntimeDependencies(
+                model=CounterModel(),
+                context_builder=StubContextBuilder(),
+                policy=StubPolicy(),
+                tools=StubTools(),
+                verifier=StubVerifier(),
+            )
+        )
 
         with pytest.raises(ModelValidationError, match="call_id does not match"):
             runtime.run("test task")

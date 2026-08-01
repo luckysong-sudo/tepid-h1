@@ -1,5 +1,4 @@
 """Tests for logging utilities."""
-import pytest
 
 
 class TestSetupLogging:
@@ -42,7 +41,6 @@ class TestLogTrainingStep:
 
     def test_log_training_step(self, caplog):
         from tepid_h1.logging_utils import setup_logging, log_training_step
-        import logging
 
         logger = setup_logging(level="INFO")
         with caplog.at_level("INFO", logger="tepid_h1"):

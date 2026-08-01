@@ -136,9 +136,7 @@ class ModelTests(unittest.TestCase):
                 delta_states = chunk.delta_states
                 attention_states = chunk.attention_states
                 offset += width
-                self.assertTrue(
-                    all(state.tokens_seen == offset for state in attention_states)
-                )
+                self.assertTrue(all(state.tokens_seen == offset for state in attention_states))
                 self.assertTrue(
                     all(
                         state.key.shape[2] <= config.local_window - 1

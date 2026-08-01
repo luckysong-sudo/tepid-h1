@@ -1,4 +1,5 @@
 """Gradient checkpointing support for memory-efficient training."""
+
 from __future__ import annotations
 
 from functools import wraps
@@ -144,5 +145,7 @@ def estimate_memory_savings(
         "parameter_memory_bytes": float(param_bytes),
         "estimated_activation_memory_bytes": float(activation_memory),
         "estimated_savings_with_checkpointing_bytes": float(saved_memory),
-        "total_memory_with_checkpointing_bytes": float(param_bytes + activation_memory - saved_memory),
+        "total_memory_with_checkpointing_bytes": float(
+            param_bytes + activation_memory - saved_memory
+        ),
     }

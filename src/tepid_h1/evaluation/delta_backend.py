@@ -3,7 +3,7 @@ from __future__ import annotations
 import platform
 import time
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import Tensor, nn
@@ -51,7 +51,10 @@ def validate_delta_backend(config: DeltaBackendValidationConfig) -> dict[str, An
     reference = GatedDeltaMemoryReference(model_config).to(device=device, dtype=dtype)
     candidate_layer = GatedDeltaMemoryEager(model_config).to(device=device, dtype=dtype)
     candidate_layer.load_state_dict(reference.state_dict())
-    candidate = torch.compile(candidate_layer, backend=config.backend, fullgraph=True)
+    candidate = cast(
+        nn.Module,
+        torch.compile(candidate_layer, backend=config.backend, fullgraph=True),
+    )
 
     generator = torch.Generator(device="cpu")
     generator.manual_seed(config.seed + 1)

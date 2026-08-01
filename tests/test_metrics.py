@@ -1,4 +1,5 @@
 """Tests for metrics collection utilities."""
+
 import pytest
 
 

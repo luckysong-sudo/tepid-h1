@@ -53,12 +53,8 @@ class TrainingTests(unittest.TestCase):
         config = TepidH1Config.smoke()
         model = TepidH1CausalLM(config)
         model.train()
-        batches = tuple(
-            torch.randint(0, config.vocab_size, (1, 6)) for _ in range(2)
-        )
-        parameters_before = tuple(
-            parameter.detach().clone() for parameter in model.parameters()
-        )
+        batches = tuple(torch.randint(0, config.vocab_size, (1, 6)) for _ in range(2))
+        parameters_before = tuple(parameter.detach().clone() for parameter in model.parameters())
 
         metrics = evaluate_causal_lm(model, batches)
 
@@ -187,8 +183,7 @@ class TrainingTests(unittest.TestCase):
         generator = torch.Generator(device="cpu")
         generator.manual_seed(67)
         batches = tuple(
-            torch.randint(0, config.vocab_size, (1, 6), generator=generator)
-            for _ in range(4)
+            torch.randint(0, config.vocab_size, (1, 6), generator=generator) for _ in range(4)
         )
 
         def build_training_state():
@@ -219,9 +214,7 @@ class TrainingTests(unittest.TestCase):
         split, split_optimizer, split_scheduler = build_training_state()
         split_lrs = []
         for batch in batches[:2]:
-            split_lrs.append(
-                causal_lm_train_step(split, batch, split_optimizer).learning_rate
-            )
+            split_lrs.append(causal_lm_train_step(split, batch, split_optimizer).learning_rate)
             split_scheduler.step()
 
         with tempfile.TemporaryDirectory() as directory:

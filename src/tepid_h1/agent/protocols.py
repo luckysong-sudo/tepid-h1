@@ -8,8 +8,10 @@ from typing import Any, Protocol, TypeAlias
 
 # --- Role enum ---
 
+
 class Role(str, Enum):
     """Message role in agent conversations."""
+
     USER = "user"
     ASSISTANT = "assistant"
     OBSERVATION = "observation"
@@ -17,6 +19,7 @@ class Role(str, Enum):
 
 
 # --- Validation helpers ---
+
 
 def _validate_non_empty(value: str, name: str) -> str:
     """Validate a string is non-empty and strip whitespace."""
@@ -35,6 +38,7 @@ def _validate_positive(value: int, name: str) -> int:
 
 # --- Data classes ---
 
+
 @dataclass(frozen=True)
 class ToolCall:
     call_id: str
@@ -43,7 +47,9 @@ class ToolCall:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "call_id", _validate_non_empty(self.call_id, "ToolCall.call_id"))
-        object.__setattr__(self, "tool_name", _validate_non_empty(self.tool_name, "ToolCall.tool_name"))
+        object.__setattr__(
+            self, "tool_name", _validate_non_empty(self.tool_name, "ToolCall.tool_name")
+        )
 
 
 @dataclass(frozen=True)
@@ -61,7 +67,9 @@ class FinalAnswer:
     evidence_call_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "content", _validate_non_empty(self.content, "FinalAnswer.content"))
+        object.__setattr__(
+            self, "content", _validate_non_empty(self.content, "FinalAnswer.content")
+        )
 
 
 AgentAction: TypeAlias = ToolCall | FinalAnswer
@@ -83,7 +91,9 @@ class RuntimeState:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "task", _validate_non_empty(self.task, "RuntimeState.task"))
-        object.__setattr__(self, "max_steps", _validate_positive(self.max_steps, "RuntimeState.max_steps"))
+        object.__setattr__(
+            self, "max_steps", _validate_positive(self.max_steps, "RuntimeState.max_steps")
+        )
 
     def can_proceed(self) -> bool:
         """Check if the agent can take more steps."""
@@ -137,5 +147,5 @@ class Telemetry(Protocol):
 
 class ModelValidationError(ValueError):
     """Raised when model output violates protocol constraints."""
-    pass
 
+    pass

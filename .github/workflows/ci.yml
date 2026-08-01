@@ -48,7 +48,7 @@ jobs:
       - name: Lint with flake8
         run: flake8 src/ tests/
 
-      - name: Format check with ruff
+      - name: Critical lint with ruff
         run: ruff check src/ tests/
 
   coverage:

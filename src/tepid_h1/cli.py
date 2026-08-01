@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Callable
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,21 +10,12 @@ from typing import Any
 
 from .config import TepidH1Config
 from .data import (
-    AuditFinding,
-    AuditReport,
-    BenchmarkSample,
-    ContaminationMatch,
-    CorpusStats,
-    DecontaminationReport,
-    SplitIsolationReport,
-    TextRecord,
     audit_inventory,
     benchmark_candidate,
     check_paired_corpus_isolation,
     compare_corpora,
     load_corpus,
     load_inventory,
-    load_paired_corpus_records,
     load_text_records,
     select_candidate,
     summarize_paired_corpus,
@@ -43,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tepid-h1")
     subparsers = parser.add_subparsers(dest="command", required=True)
     # Version command
-    parser.add_argument("--version", action="version", version=f"%(prog)s 0.2.0")
+    parser.add_argument("--version", action="version", version="%(prog)s 0.2.0")
     plan = subparsers.add_parser("plan", help="print the macro-block layer plan")
     plan.add_argument("--variant", choices=("prototype", "reference"), default="prototype")
     audit = subparsers.add_parser("data-audit", help="audit an M0 data inventory")
@@ -202,6 +194,13 @@ def _load_tokenizer(path: Path) -> Any:
     return Tokenizer.from_file(str(path))
 
 
+def _tokenizer_encode(tokenizer: Any) -> Callable[[str], list[int]]:
+    def encode(text: str) -> list[int]:
+        return list(tokenizer.encode(text).ids)
+
+    return encode
+
+
 def _parse_candidate(value: str) -> tuple[int, Path]:
     size, separator, path = value.partition("=")
     if not separator:
@@ -237,25 +236,25 @@ def main() -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
     if args.command == "data-audit":
-        report = audit_inventory(load_inventory(args.inventory))
-        _write_payload(report.to_dict(), args.report)
-        return 0 if report.passed else 2
+        audit_report = audit_inventory(load_inventory(args.inventory))
+        _write_payload(audit_report.to_dict(), args.report)
+        return 0 if audit_report.passed else 2
     if args.command == "decontaminate":
-        report = compare_corpora(
+        decontamination_report = compare_corpora(
             load_text_records(args.training),
             load_text_records(args.benchmark),
             ngram_size=args.ngram_size,
             similarity_threshold=args.threshold,
         )
-        payload = {
+        decontamination_payload: dict[str, Any] = {
             "schema_version": 1,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "training_file_sha256": file_sha256(args.training),
             "benchmark_file_sha256": file_sha256(args.benchmark),
-            **report.to_dict(),
+            **decontamination_report.to_dict(),
         }
-        _write_payload(payload, args.report)
-        return 0 if report.clean else 3
+        _write_payload(decontamination_payload, args.report)
+        return 0 if decontamination_report.clean else 3
     if args.command == "tokenizer-benchmark":
         samples = load_corpus(args.corpus)
         candidates: list[dict[str, Any]] = []
@@ -271,11 +270,11 @@ def main() -> int:
                 benchmark_candidate(
                     name=path.stem,
                     vocab_size=vocab_size,
-                    encode=lambda text, instance=tokenizer: instance.encode(text).ids,
+                    encode=_tokenizer_encode(tokenizer),
                     samples=samples,
                 )
             )
-        payload = {
+        tokenizer_payload: dict[str, Any] = {
             "schema_version": 1,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "corpus_sha256": corpus_digest(samples),
@@ -283,7 +282,7 @@ def main() -> int:
             "candidates": candidates,
             "selection": select_candidate(candidates),
         }
-        _write_payload(payload, args.report)
+        _write_payload(tokenizer_payload, args.report)
         return 0
     if args.command == "train-smoke":
         if args.steps <= 0 or args.batch_size <= 0:
@@ -490,9 +489,7 @@ def main() -> int:
             **data_contract,
             "start_step": starting_step,
             "end_step": final_step,
-            "batch_sha256": (
-                governed_corpus.batch_sha256 if governed_corpus is not None else None
-            ),
+            "batch_sha256": (governed_corpus.batch_sha256 if governed_corpus is not None else None),
             "records": governed_corpus.records if governed_corpus is not None else None,
             "domains": list(governed_corpus.domains) if governed_corpus is not None else None,
         }
@@ -504,9 +501,7 @@ def main() -> int:
                 "before": asdict(validation_before),
                 "after": asdict(validation_after),
                 "loss_change": validation_after.loss - validation_before.loss,
-                "perplexity_change": (
-                    validation_after.perplexity - validation_before.perplexity
-                ),
+                "perplexity_change": (validation_after.perplexity - validation_before.perplexity),
             }
             if validation_corpus is not None
             and validation_contract is not None
@@ -631,25 +626,25 @@ def main() -> int:
         return 0
     if args.command == "corpus-stats":
         stats = summarize_paired_corpus(args.corpus)
-        payload = {
+        corpus_stats_payload: dict[str, Any] = {
             "schema_version": 1,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "corpus_file_sha256": file_sha256(args.corpus),
             **stats.to_dict(),
         }
-        _write_payload(payload, args.report)
+        _write_payload(corpus_stats_payload, args.report)
         return 0 if not stats.duplicate_record_ids else 6
     if args.command == "corpus-compare":
-        report = check_paired_corpus_isolation(args.training, args.validation)
-        payload = {
+        isolation_report = check_paired_corpus_isolation(args.training, args.validation)
+        corpus_compare_payload: dict[str, Any] = {
             "schema_version": 1,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "training_file_sha256": file_sha256(args.training),
             "validation_file_sha256": file_sha256(args.validation),
-            **report.to_dict(),
+            **isolation_report.to_dict(),
         }
-        _write_payload(payload, args.report)
-        return 0 if report.clean else 7
+        _write_payload(corpus_compare_payload, args.report)
+        return 0 if isolation_report.clean else 7
     raise AssertionError(f"unsupported command: {args.command}")
 
 

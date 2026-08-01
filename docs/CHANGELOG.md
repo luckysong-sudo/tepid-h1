@@ -14,6 +14,10 @@ All notable changes to the Tepid-H1 project will be documented in this file.
 - Pre-commit hooks for code quality
 
 ### Fixed
+- Aligned package metadata version with the public CLI/package version.
+- Restored flake8 and mypy as blocking CI gates after clearing the current baseline.
+- Fixed NF4 quantization validation order and removed an undefined helper call.
+- Removed accidental local installer/null artifacts from the tracked tree.
 - Type annotation for `attn_bias` parameter in `model.py`
 - Removed redundant `num_kv_heads` parameter from `TepidH1CausalLM`
 - Unified `self` type hints in `layers.py` to use `nn.Module`

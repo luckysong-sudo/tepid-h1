@@ -69,9 +69,7 @@ class PairedExperimentTests(unittest.TestCase):
         if torch.cuda.is_available():
             self.skipTest("CUDA is available in this test environment")
         with self.assertRaisesRegex(RuntimeError, "CUDA"):
-            run_paired_smoke(
-                PairedExperimentConfig(steps=1, sequence_length=4, device="cuda")
-            )
+            run_paired_smoke(PairedExperimentConfig(steps=1, sequence_length=4, device="cuda"))
 
     def test_governed_corpus_binds_inventory_and_reports_uncertainty(self):
         from tepid_h1.experiments import (
@@ -103,9 +101,7 @@ class PairedExperimentTests(unittest.TestCase):
         self.assertEqual(len(report["data"]["inventory_file_sha256"]), 64)
         self.assertEqual(len(report["trials"]), 2)
         self.assertEqual(report["aggregates"]["hybrid"]["loss_change"]["samples"], 2)
-        throughput_ratio = report["aggregates"]["paired"][
-            "baseline_over_hybrid_tokens_per_second"
-        ]
+        throughput_ratio = report["aggregates"]["paired"]["baseline_over_hybrid_tokens_per_second"]
         self.assertEqual(throughput_ratio["samples"], 2)
         self.assertGreater(throughput_ratio["ci95_low"], 0)
 

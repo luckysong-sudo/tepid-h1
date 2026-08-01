@@ -1,11 +1,12 @@
 """Autoregressive inference engine with KV-cache support for Tepid-H1."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import torch
-from torch import Tensor, nn
+from torch import Tensor
 
 from .config import TepidH1Config
 from .modeling import AttentionState, TepidH1CausalLM
@@ -15,6 +16,7 @@ from .modeling.cache import AttentionCache
 @dataclass(frozen=True)
 class GenerateConfig:
     """Configuration for autoregressive generation."""
+
     max_new_tokens: int = 64
     temperature: float = 1.0
     top_k: int = 0
@@ -96,34 +98,45 @@ class InferenceEngine:
 
         gen_config = config or GenerateConfig()
         kwargs_config = GenerateConfig(**kwargs)
+
         def _override(base, override, field):
             """Use override value only if it differs from the field's default."""
             override_default = GenerateConfig.__dataclass_fields__[field].default
             if override == override_default and base != override_default:
                 return base
             return override
+
         effective_config = GenerateConfig(
-            max_new_tokens=_override(gen_config.max_new_tokens, kwargs_config.max_new_tokens, 'max_new_tokens'),
-            temperature=_override(gen_config.temperature, kwargs_config.temperature, 'temperature'),
-            top_k=_override(gen_config.top_k, kwargs_config.top_k, 'top_k'),
-            top_p=_override(gen_config.top_p, kwargs_config.top_p, 'top_p'),
-            repetition_penalty=_override(gen_config.repetition_penalty, kwargs_config.repetition_penalty, 'repetition_penalty'),
-            pad_token_id=_override(gen_config.pad_token_id, kwargs_config.pad_token_id, 'pad_token_id'),
-            eos_token_id=_override(gen_config.eos_token_id, kwargs_config.eos_token_id, 'eos_token_id'),
-            num_return_sequences=_override(gen_config.num_return_sequences, kwargs_config.num_return_sequences, 'num_return_sequences'),
-            do_sample=kwargs_config.do_sample if kwargs_config.do_sample is not None else gen_config.do_sample,
-            device=_override(gen_config.device, kwargs_config.device, 'device'),
-            dtype=_override(gen_config.dtype, kwargs_config.dtype, 'dtype'),
+            max_new_tokens=_override(
+                gen_config.max_new_tokens, kwargs_config.max_new_tokens, "max_new_tokens"
+            ),
+            temperature=_override(gen_config.temperature, kwargs_config.temperature, "temperature"),
+            top_k=_override(gen_config.top_k, kwargs_config.top_k, "top_k"),
+            top_p=_override(gen_config.top_p, kwargs_config.top_p, "top_p"),
+            repetition_penalty=_override(
+                gen_config.repetition_penalty,
+                kwargs_config.repetition_penalty,
+                "repetition_penalty",
+            ),
+            pad_token_id=_override(
+                gen_config.pad_token_id, kwargs_config.pad_token_id, "pad_token_id"
+            ),
+            eos_token_id=_override(
+                gen_config.eos_token_id, kwargs_config.eos_token_id, "eos_token_id"
+            ),
+            num_return_sequences=_override(
+                gen_config.num_return_sequences,
+                kwargs_config.num_return_sequences,
+                "num_return_sequences",
+            ),
+            do_sample=kwargs_config.do_sample
+            if kwargs_config.do_sample is not None
+            else gen_config.do_sample,
+            device=_override(gen_config.device, kwargs_config.device, "device"),
+            dtype=_override(gen_config.dtype, kwargs_config.dtype, "dtype"),
         )
 
         device = torch.device(effective_config.device)
-        dtype_map = {
-            "float32": torch.float32,
-            "bfloat16": torch.bfloat16,
-            "float16": torch.float16,
-        }
-        dtype = dtype_map.get(effective_config.dtype, torch.float32)
-
         input_ids = input_ids.to(device=device)
         if input_ids.ndim == 1:
             input_ids = input_ids.unsqueeze(0)
@@ -136,18 +149,23 @@ class InferenceEngine:
             output = self.model(
                 input_ids,
                 delta_states=(
-                    tuple(
-                        None if cache is None else cache.k_cache for cache in self._delta_caches
-                    ) if self._use_kv_cache else None
+                    tuple(None if cache is None else cache.k_cache for cache in self._delta_caches)
+                    if self._use_kv_cache
+                    else None
                 ),
                 attention_states=(
                     tuple(
-                        None if cache is None else AttentionState(
-                            key=cache.k_cache,
-                            value=cache.v_cache,
+                        None
+                        if cache is None
+                        else AttentionState(
+                            key=cast(Tensor, cache.k_cache),
+                            value=cast(Tensor, cache.v_cache),
                             tokens_seen=0,
-                        ) for cache in self._attention_caches
-                    ) if self._use_kv_cache else None
+                        )
+                        for cache in self._attention_caches
+                    )
+                    if self._use_kv_cache
+                    else None
                 ),
             )
 
@@ -165,9 +183,15 @@ class InferenceEngine:
                 effective_config.num_return_sequences, dim=0
             )
             if delta_states is not None:
-                delta_states = _expand_states(delta_states, effective_config.num_return_sequences)
+                delta_states = cast(
+                    tuple[Tensor, ...],
+                    _expand_states(delta_states, effective_config.num_return_sequences),
+                )
             if attention_states is not None:
-                attention_states = _expand_states(attention_states, effective_config.num_return_sequences)
+                attention_states = cast(
+                    tuple[AttentionState, ...],
+                    _expand_states(attention_states, effective_config.num_return_sequences),
+                )
             batch_size *= effective_config.num_return_sequences
 
         # Autoregressive decoding
@@ -303,7 +327,7 @@ def _expand_states(
     """Expand states for multiple sequences."""
     if states is None:
         return None
-    expanded = []
+    expanded: list[Tensor | AttentionState] = []
     for state in states:
         if isinstance(state, AttentionState):
             expanded.append(
@@ -315,7 +339,9 @@ def _expand_states(
             )
         else:
             expanded.append(state.repeat_interleave(repeats, dim=0))
-    return tuple(expanded)
+    if all(isinstance(item, AttentionState) for item in expanded):
+        return tuple(cast(list[AttentionState], expanded))
+    return tuple(cast(list[Tensor], expanded))
 
 
 def decode_text(
@@ -337,6 +363,8 @@ def decode_text(
         Decoded text string.
     """
     if not hasattr(tokenizer, "decode"):
-        raise AttributeError(f"tokenizer must have a 'decode' method, got {type(tokenizer).__name__}")
-    generated_tokens = generated_ids[0, input_ids.shape[1]:]
+        raise AttributeError(
+            f"tokenizer must have a 'decode' method, got {type(tokenizer).__name__}"
+        )
+    generated_tokens = generated_ids[0, input_ids.shape[1] :]
     return tokenizer.decode(generated_tokens.tolist(), skip_special_tokens=skip_special_tokens)

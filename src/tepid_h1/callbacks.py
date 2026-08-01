@@ -1,4 +1,5 @@
 """Training callbacks and monitoring for Tepid-H1."""
+
 from __future__ import annotations
 
 import time
@@ -60,7 +61,7 @@ class TrainingMetricsBuffer:
             return 0.0
         mean = sum(values) / len(values)
         variance = sum((v - mean) ** 2 for v in values) / (len(values) - 1)
-        return variance ** 0.5
+        return variance**0.5
 
     def is_stable(self, *, tolerance: float = 0.01, window: int | None = None) -> bool:
         if len(self._losses) < 10:
@@ -193,9 +194,7 @@ class TrainingRunner:
             raise RuntimeError("training loss is NaN or Inf")
 
         output.loss.backward()
-        gradient_norm = torch.nn.utils.clip_grad_norm_(
-            self.model.parameters(), max_gradient_norm
-        )
+        gradient_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_gradient_norm)
         if not torch.isfinite(gradient_norm):
             self.optimizer.zero_grad(set_to_none=True)
             raise RuntimeError("gradient norm is NaN or Inf")

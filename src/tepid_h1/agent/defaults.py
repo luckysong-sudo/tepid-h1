@@ -62,7 +62,9 @@ class ToolRegistry:
     never crashes on a tool failure.
     """
 
-    def __init__(self, tools: Mapping[str, Callable[[Mapping[str, Any]], Any]] | None = None) -> None:
+    def __init__(
+        self, tools: Mapping[str, Callable[[Mapping[str, Any]], Any]] | None = None
+    ) -> None:
         self._tools: dict[str, Callable[[Mapping[str, Any]], Any]] = dict(tools or {})
 
     def register(
@@ -108,9 +110,7 @@ class EvidenceVerifier:
 
     def verify_final(self, state: RuntimeState, answer: FinalAnswer) -> PolicyDecision:
         successful = {
-            item.call_id
-            for item in state.observations
-            if isinstance(item, ToolResult) and item.ok
+            item.call_id for item in state.observations if isinstance(item, ToolResult) and item.ok
         }
         missing = sorted(set(answer.evidence_call_ids) - successful)
         if missing:

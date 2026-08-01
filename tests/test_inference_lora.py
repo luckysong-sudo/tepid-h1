@@ -1,4 +1,5 @@
 """Integration tests for InferenceEngine and LoRA adapter."""
+
 import pytest
 import torch
 import torch.nn as nn
@@ -6,7 +7,6 @@ import torch.nn as nn
 from tepid_h1.config import TepidH1Config
 from tepid_h1.inference import GenerateConfig, InferenceEngine, decode_text
 from tepid_h1.lora import (
-    LoRAAdapter,
     LoRAConfig,
     apply_lora,
     freeze_base_model,
@@ -81,6 +81,7 @@ class TestInferenceEngine:
 
     def test_generate_with_eos(self, engine):
         """Test generation stopping at EOS token."""
+
         class FakeTokenizer:
             def decode(self, tokens, skip_special_tokens=True):
                 return " ".join(str(t) for t in tokens)
@@ -176,7 +177,7 @@ class TestLoRA:
         """Test LoRA parameter counting."""
         # Use default target_modules that match simple_model's layer names
         config = LoRAConfig(r=4, lora_alpha=8.0, target_modules=["0", "2"])
-        adapter = apply_lora(simple_model, config)
+        apply_lora(simple_model, config)
 
         lora_params = get_lora_params(simple_model)
         assert len(lora_params) > 0
@@ -187,7 +188,7 @@ class TestLoRA:
     def test_freeze_base_model(self, simple_model):
         """Test freezing base model parameters."""
         config = LoRAConfig(r=4, lora_alpha=8.0)
-        adapter = apply_lora(simple_model, config)
+        apply_lora(simple_model, config)
         freeze_base_model(simple_model)
 
         for name, param in simple_model.named_parameters():
@@ -203,7 +204,7 @@ class TestLoRA:
 
         # Set some non-zero values
         for child in simple_model.modules():
-            if hasattr(child, 'lora_A'):
+            if hasattr(child, "lora_A"):
                 child.lora_A.data.fill_(0.1)
                 child.lora_B.data.fill_(0.1)
 
@@ -215,7 +216,7 @@ class TestLoRA:
 
         # After unmerge, LoRA params should be reset
         for child in simple_model.modules():
-            if hasattr(child, 'lora_A'):
+            if hasattr(child, "lora_A"):
                 assert torch.allclose(child.lora_A, torch.zeros_like(child.lora_A))
                 assert torch.allclose(child.lora_B, torch.zeros_like(child.lora_B))
 

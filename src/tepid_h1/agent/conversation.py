@@ -1,11 +1,12 @@
 """Multi-turn conversation support for Tepid-H1 Agent."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
 
 from .protocols import FinalAnswer, Role, ToolCall
-from .runtime import AgentRuntime, RuntimeDependencies
+from .runtime import AgentRuntime
 
 
 @dataclass
@@ -55,10 +56,12 @@ class Conversation:
                 messages.append(turn.assistant_message)
             for obs in turn.observations:
                 if isinstance(obs, dict) and "source" in obs:
-                    messages.append(Message(
-                        role=Role.OBSERVATION,
-                        content=str(obs.get("content", obs)),
-                    ))
+                    messages.append(
+                        Message(
+                            role=Role.OBSERVATION,
+                            content=str(obs.get("content", obs)),
+                        )
+                    )
         return messages
 
     def add_turn(
@@ -91,7 +94,7 @@ class Conversation:
             if turn.assistant_message:
                 if turn.assistant_message.tool_calls:
                     for tc in turn.assistant_message.tool_calls:
-                        lines.append(f"Assistant called: {tc.function.name}({tc.function.arguments})")
+                        lines.append(f"Assistant called: {tc.tool_name}({tc.arguments})")
                 else:
                     lines.append(f"Assistant: {turn.assistant_message.content}")
             for obs in turn.observations:
@@ -135,7 +138,7 @@ class ConversationAgent:
                 f"{conversation.task}\n\nContext: {conversation.get_context_for_model()}",
                 max_steps=max_steps,
             )
-        except Exception as exc:
+        except Exception:
             turn = conversation.current_turn
             if turn is not None:
                 turn.completed = True
@@ -145,13 +148,13 @@ class ConversationAgent:
             role=Role.ASSISTANT,
             content=str(result) if not isinstance(result, FinalAnswer) else result.content,
         )
-        conversation.add_turn(
+        completed_turn = conversation.add_turn(
             user_msg,
             assistant_message=assistant_msg,
             final_answer=result if isinstance(result, FinalAnswer) else None,
             completed=True,
         )
-        return conversation.current_turn
+        return completed_turn
 
     def list_conversations(self) -> list[str]:
         return list(self._conversations.keys())

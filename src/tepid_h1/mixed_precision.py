@@ -1,4 +1,5 @@
 """Mixed precision training utilities for improved performance."""
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -7,11 +8,11 @@ from enum import Enum
 from typing import Any, Generator
 
 import torch
-import torch.nn as nn
 
 
 class PrecisionMode(str, Enum):
     """Training precision modes."""
+
     FP32 = "fp32"
     BF16 = "bfloat16"
     FP16 = "float16"
@@ -21,6 +22,7 @@ class PrecisionMode(str, Enum):
 @dataclass
 class MixedPrecisionConfig:
     """Configuration for mixed precision training."""
+
     enabled: bool = True
     mode: PrecisionMode = PrecisionMode.BF16
     grad_scaler: bool = True
@@ -71,10 +73,10 @@ class MixedPrecisionManager:
             return self.scaler.scale(loss)
         return loss
 
-    def unscale_grads(self, model: nn.Module) -> None:
+    def unscale_grads(self, optimizer: torch.optim.Optimizer) -> None:
         """Unscale gradients after backward pass."""
         if self.scaler is not None:
-            self.scaler.unscale_(model)
+            self.scaler.unscale_(optimizer)
 
     def step(self, optimizer: torch.optim.Optimizer) -> None:
         """Perform optimizer step with scaling."""

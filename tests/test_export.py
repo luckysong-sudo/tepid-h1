@@ -1,4 +1,5 @@
 """Tests for model export utilities."""
+
 from __future__ import annotations
 
 import json
@@ -116,7 +117,9 @@ class TestModelExporter:
         assert result.exists()
         assert result.parent == tmp_path / "nested" / "dir"
 
-    def test_export_safe_tensor_creates_config(self, exporter: ModelExporter, tmp_path: Path) -> None:
+    def test_export_safe_tensor_creates_config(
+        self, exporter: ModelExporter, tmp_path: Path
+    ) -> None:
         output_path = tmp_path / "model.safetensors"
         result = exporter.export_safe_tensor(output_path)
         config_path = result.parent / "config.json"
@@ -126,7 +129,9 @@ class TestModelExporter:
         assert saved_config["hidden_size"] == 32
         assert saved_config["num_layers"] == 8
 
-    def test_export_safe_tensor_with_nested_dir(self, exporter: ModelExporter, tmp_path: Path) -> None:
+    def test_export_safe_tensor_with_nested_dir(
+        self, exporter: ModelExporter, tmp_path: Path
+    ) -> None:
         output_path = tmp_path / "nested" / "dir" / "model.safetensors"
         result = exporter.export_safe_tensor(output_path)
         assert result.exists()

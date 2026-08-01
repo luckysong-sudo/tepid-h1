@@ -2,7 +2,6 @@
 
 import pytest
 import torch
-from torch import nn
 
 from tepid_h1.config import TepidH1Config
 from tepid_h1.modeling.layers import (
@@ -121,6 +120,7 @@ class TestModelTypeAnnotations:
     def test_causal_lm_loss_raises_on_shape_mismatch(self):
         """Loss calculation should raise on label/input shape mismatch."""
         from tepid_h1.modeling.model import _causal_lm_loss
+
         logits = torch.randn(2, 10, 100)
         input_ids = torch.randint(0, 100, (2, 10))
         labels = torch.randint(0, 100, (2, 9))  # wrong shape
@@ -130,6 +130,7 @@ class TestModelTypeAnnotations:
     def test_causal_lm_loss_raises_on_short_sequence(self):
         """Loss calculation should raise on sequences < 2 tokens."""
         from tepid_h1.modeling.model import _causal_lm_loss
+
         logits = torch.randn(2, 1, 100)
         input_ids = torch.randint(0, 100, (2, 1))
         labels = torch.randint(0, 100, (2, 1))
@@ -139,9 +140,12 @@ class TestModelTypeAnnotations:
     def test_input_validation_in_forward(self):
         """TepidH1Model forward should validate input dimensions."""
         from tepid_h1.modeling.model import TepidH1Model
+
         config = self._make_config()
         model = TepidH1Model(config)
         # 1D input should fail
-        x = torch.randn(10,)
+        x = torch.randn(
+            10,
+        )
         with pytest.raises(ValueError, match="input_ids must have shape"):
             model(x)

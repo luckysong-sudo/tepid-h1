@@ -275,6 +275,8 @@ def load_checkpoint(
 
     model.load_state_dict(model_state, strict=True)
     if optimizer is not None:
+        if not isinstance(optimizer_state, dict):
+            raise TypeError("checkpoint optimizer_state must be a mapping")
         optimizer.load_state_dict(optimizer_state)
     if scheduler is not None:
         if not isinstance(scheduler_state, Mapping):

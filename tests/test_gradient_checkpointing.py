@@ -1,7 +1,7 @@
 """Tests for gradient checkpointing utilities."""
+
 from __future__ import annotations
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -158,7 +158,6 @@ class TestEstimateMemorySavings:
         # Total with checkpointing should be less than param + activation
         total_with = estimates["total_memory_with_checkpointing_bytes"]
         total_without = (
-            estimates["parameter_memory_bytes"]
-            + estimates["estimated_activation_memory_bytes"]
+            estimates["parameter_memory_bytes"] + estimates["estimated_activation_memory_bytes"]
         )
         assert total_with < total_without

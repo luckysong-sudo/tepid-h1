@@ -1,4 +1,5 @@
 """LoRA (Low-Rank Adaptation) adapter for parameter-efficient fine-tuning."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -12,10 +13,13 @@ import torch.nn.functional as F
 @dataclass
 class LoRAConfig:
     """Configuration for LoRA adapter."""
+
     r: int = 16
     lora_alpha: float = 16.0
     lora_dropout: float = 0.0
-    target_modules: list[str] = field(default_factory=lambda: ["q_proj", "k_proj", "v_proj", "out_proj"])
+    target_modules: list[str] = field(
+        default_factory=lambda: ["q_proj", "k_proj", "v_proj", "out_proj"]
+    )
     merge_weights: bool = True
     fan_in_fan_out: bool = False
 
@@ -71,7 +75,6 @@ class LoRALinear(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         base_output = self.base_layer(x)
-        lora_output = (self.lora_B @ (self.lora_A @ x.T)).T * self.scaling
         dropout = F.dropout(x, p=self.lora_dropout, training=self.training)
         return base_output + (self.lora_B @ (self.lora_A @ dropout.T)).T * self.scaling
 

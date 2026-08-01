@@ -1,10 +1,11 @@
 """Model quantization utilities for Tepid-H1."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import nn
@@ -31,13 +32,15 @@ class QuantizationConfig:
     axis: int = -1
 
     def __post_init__(self) -> None:
-        if self.mode in {QuantizationMode.INT8, QuantizationMode.INT4, QuantizationMode.NF4}:
+        if self.mode == QuantizationMode.NF4:
+            if not self.symmetric:
+                raise ValueError("NF4 requires symmetric quantization")
+            if self.group_size != 0:
+                raise ValueError("NF4 uses per-tensor quantization (group_size=0)")
+            return
+        if self.mode in {QuantizationMode.INT8, QuantizationMode.INT4}:
             if self.group_size <= 0:
                 raise ValueError("group_size must be positive for integer quantization")
-            if not self.symmetric and self.mode == QuantizationMode.NF4:
-                raise ValueError("NF4 requires symmetric quantization")
-        if self.mode == QuantizationMode.NF4 and self.group_size != 0:
-            raise ValueError("NF4 uses per-tensor quantization (group_size=0)")
 
 
 @dataclass
@@ -138,11 +141,11 @@ def _quantize_int8(
         scales = flat.abs().amax(dim=-1).clamp(min=1e-12) / 127.0
         zeros = None
     else:
-        q_min, q_max = 0.0, 255.0
+        q_max_float = 255.0
         fmin = flat.amin(dim=-1)
         fmax = flat.amax(dim=-1)
-        scales = (fmax - fmin).clamp(min=1e-12) / q_max
-        zeros = (q_max * fmin / (fmin - fmax)).clamp(min=0.0, max=q_max)
+        scales = (fmax - fmin).clamp(min=1e-12) / q_max_float
+        zeros = (q_max_float * fmin / (fmin - fmax)).clamp(min=0.0, max=q_max_float)
 
     scales = scales.reshape(*shape[:-1], num_groups, 1)
     zeros = zeros.reshape(*shape[:-1], num_groups, 1) if zeros is not None else None
@@ -174,11 +177,11 @@ def _quantize_int4(
         scales = flat.abs().amax(dim=-1).clamp(min=1e-12) / 7.0
         zeros = None
     else:
-        q_min, q_max = 0.0, 15.0
+        q_max_float = 15.0
         fmin = flat.amin(dim=-1)
         fmax = flat.amax(dim=-1)
-        scales = (fmax - fmin).clamp(min=1e-12) / q_max
-        zeros = (q_max * fmin / (fmin - fmax)).clamp(min=0.0, max=q_max)
+        scales = (fmax - fmin).clamp(min=1e-12) / q_max_float
+        zeros = (q_max_float * fmin / (fmin - fmax)).clamp(min=0.0, max=q_max_float)
 
     scales = scales.reshape(*shape[:-1], num_groups, 1)
     zeros = zeros.reshape(*shape[:-1], num_groups, 1) if zeros is not None else None
@@ -189,12 +192,14 @@ def _quantize_int4(
 
 def _quantize_nf4(weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     flat = weight.float()
-    quantized = _nf4_quantize(flat)
     scales = flat.abs().amax(dim=-1, keepdim=True).clamp(min=1e-12) / 3.0
-    return quantized.to(torch.uint8), scales
+    quantized = (flat / scales).round().clamp(-3, 3)
+    return quantized.to(torch.int8), scales
 
 
-def _quantize_fp8(weight: torch.Tensor, config: QuantizationConfig) -> tuple[torch.Tensor, torch.Tensor]:
+def _quantize_fp8(
+    weight: torch.Tensor, config: QuantizationConfig
+) -> tuple[torch.Tensor, torch.Tensor]:
     flat = weight.float()
     scales = flat.abs().amax(dim=-1, keepdim=True).clamp(min=1e-12) / 448.0
     quantized = (flat / scales).clamp(-448.0, 448.0)
@@ -292,7 +297,12 @@ def estimate_quantized_size(
             weight_bytes *= 2
         bias_bytes = module.bias.numel() if module.bias is not None else 0
         scale_bytes = max(1, module.weight.shape[-1] // max(config.group_size, 1))
-        zero_bytes = scale_bytes if not config.symmetric and config.mode in {QuantizationMode.INT8, QuantizationMode.INT4} else 0
+        zero_bytes = (
+            scale_bytes
+            if not config.symmetric
+            and config.mode in {QuantizationMode.INT8, QuantizationMode.INT4}
+            else 0
+        )
         sizes["weight_bytes"] += weight_bytes
         sizes["scale_bytes"] += scale_bytes
         sizes["zero_bytes"] += zero_bytes
@@ -308,10 +318,10 @@ def apply_quantized_model(
     """Replace linear layers with quantized equivalents for inference."""
     for name, quantized in quantized_layers.items():
         parts = [p for p in name.split(".") if p]
-        current = model
+        current: nn.Module = model
         for part in parts:
             if part.isdigit():
-                current = current[int(part)]
+                current = cast(nn.Sequential, current)[int(part)]
             else:
                 current = getattr(current, part)
         if isinstance(current, nn.Linear):
@@ -320,7 +330,7 @@ def apply_quantized_model(
             if quantized.bias is not None:
                 current.bias = nn.Parameter(quantized.bias, requires_grad=False)
             else:
-                current.bias = None
+                current.register_parameter("bias", None)
     return model
 
 

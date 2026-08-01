@@ -11,3 +11,5 @@ checkpoints/
 /data/
 outputs/
 wandb/
+$null
+python-*-amd64.exe

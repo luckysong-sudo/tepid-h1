@@ -7,7 +7,6 @@ from tepid_h1.agent import (
     EvidenceVerifier,
     FinalAnswer,
     ListTelemetry,
-    PolicyDecision,
     RuntimeDependencies,
     StateContextBuilder,
     ToolCall,
@@ -165,7 +164,10 @@ class AgentDefaultsTests(unittest.TestCase):
         runtime = AgentRuntime(
             RuntimeDependencies(
                 model=ScriptedModel(
-                    [ToolCall(call_id=f"c{i}", tool_name="read_file", arguments={}) for i in range(10)]
+                    [
+                        ToolCall(call_id=f"c{i}", tool_name="read_file", arguments={})
+                        for i in range(10)
+                    ]
                 ),
                 context_builder=StateContextBuilder(),
                 policy=AllowlistPolicy({"read_file": ""}),

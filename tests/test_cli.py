@@ -1,4 +1,3 @@
-import argparse
 import json
 import tempfile
 import unittest
@@ -30,9 +29,10 @@ class CLIParserTests(unittest.TestCase):
         from tepid_h1.cli import build_parser
 
         parser = build_parser()
-        with tempfile.NamedTemporaryFile(suffix=".jsonl") as training, tempfile.NamedTemporaryFile(
-            suffix=".jsonl"
-        ) as benchmark:
+        with (
+            tempfile.NamedTemporaryFile(suffix=".jsonl") as training,
+            tempfile.NamedTemporaryFile(suffix=".jsonl") as benchmark,
+        ):
             args = parser.parse_args(
                 [
                     "decontaminate",
@@ -99,7 +99,6 @@ class CLIParserTests(unittest.TestCase):
 
 class CLIIntegrationTests(unittest.TestCase):
     def test_plan_command_outputs_json(self):
-        import json
         import sys
         from io import StringIO
         from unittest.mock import patch
