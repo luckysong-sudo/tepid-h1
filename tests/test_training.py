@@ -137,6 +137,36 @@ class TrainingTests(unittest.TestCase):
                 labels_batches=(torch.full((1, 3), -100),),
             )
 
+    def test_evaluation_rejects_invalid_label_dtype_before_forward(self):
+        from tepid_h1.training import evaluate_causal_lm
+
+        class FakeModel:
+            def __init__(self):
+                self.training = True
+                self.called = False
+
+            def eval(self):
+                self.training = False
+
+            def train(self, mode=True):
+                self.training = mode
+
+            def __call__(self, input_ids, labels=None):
+                self.called = True
+                return SimpleNamespace(loss=torch.tensor(1.0))
+
+        model = FakeModel()
+
+        with self.assertRaisesRegex(TypeError, "evaluation labels"):
+            evaluate_causal_lm(
+                model,
+                (torch.tensor([[1, 2, 3]]),),
+                labels_batches=(torch.tensor([[1.0, 2.0, 3.0]]),),
+            )
+
+        self.assertTrue(model.training)
+        self.assertFalse(model.called)
+
     def test_checkpoint_round_trip_restores_model_and_optimizer(self):
         from tepid_h1.config import TepidH1Config
         from tepid_h1.modeling import TepidH1CausalLM
@@ -220,6 +250,33 @@ class TrainingTests(unittest.TestCase):
                 torch.tensor([[1, 2, 3]]),
                 optimizer,
                 labels=torch.full((1, 3), -100),
+            )
+
+        self.assertFalse(model.called)
+        self.assertFalse(optimizer.state_dict()["state"])
+
+    def test_train_step_rejects_mismatched_labels_before_model_forward(self):
+        from tepid_h1.training import causal_lm_train_step
+
+        class FakeModel(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.weight = torch.nn.Parameter(torch.tensor(1.0))
+                self.called = False
+
+            def forward(self, input_ids, labels=None):
+                self.called = True
+                return SimpleNamespace(loss=self.weight * 0.0)
+
+        model = FakeModel()
+        optimizer = torch.optim.AdamW(model.parameters())
+
+        with self.assertRaisesRegex(ValueError, "same shape"):
+            causal_lm_train_step(
+                model,
+                torch.tensor([[1, 2, 3]]),
+                optimizer,
+                labels=torch.tensor([[1, 2]]),
             )
 
         self.assertFalse(model.called)

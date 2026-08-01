@@ -146,9 +146,7 @@ def causal_lm_train_step(
     model.train()
     optimizer.zero_grad(set_to_none=True)
     targets = input_ids if labels is None else labels
-    trained_tokens = int((targets[:, 1:] != -100).sum().item())
-    if trained_tokens <= 0:
-        raise ValueError("training labels must include at least one target token")
+    trained_tokens = _count_supervised_target_tokens(input_ids, targets, context="training")
     output = model(input_ids, labels=targets)
     if output.loss is None:
         raise AssertionError("model did not return a training loss")
@@ -189,12 +187,12 @@ def evaluate_causal_lm(
         with torch.no_grad():
             for input_ids, labels in zip(batches, labels_batches, strict=True):
                 targets = input_ids if labels is None else labels
+                batch_tokens = _count_supervised_target_tokens(
+                    input_ids, targets, context="evaluation"
+                )
                 output = model(input_ids, labels=targets)
                 if output.loss is None or not torch.isfinite(output.loss):
                     raise NonFiniteTrainingError("evaluation loss is NaN or Inf")
-                batch_tokens = int((targets[:, 1:] != -100).sum().item())
-                if batch_tokens <= 0:
-                    raise ValueError("evaluation labels must include at least one target token")
                 weighted_loss += float(output.loss) * batch_tokens
                 evaluated_tokens += batch_tokens
     finally:
@@ -306,3 +304,23 @@ def _serialized_model_config(model: TrainableCausalLM) -> dict[str, Any]:
     if isinstance(model, TransformerBaselineCausalLM):
         return model.baseline_config.to_dict()
     return model.config.to_dict()
+
+
+def _count_supervised_target_tokens(
+    input_ids: Tensor,
+    labels: Tensor,
+    *,
+    context: str,
+) -> int:
+    if input_ids.ndim != 2:
+        raise ValueError(f"{context} input_ids must have shape [batch, sequence]")
+    if labels.shape != input_ids.shape:
+        raise ValueError(f"{context} labels must have the same shape as input_ids")
+    if labels.dtype != torch.long:
+        raise TypeError(f"{context} labels must use torch.long dtype")
+    if labels.shape[1] < 2:
+        raise ValueError(f"{context} labels must include at least one target token")
+    target_count = int((labels[:, 1:] != -100).sum().item())
+    if target_count <= 0:
+        raise ValueError(f"{context} labels must include at least one target token")
+    return target_count
