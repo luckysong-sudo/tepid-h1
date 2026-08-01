@@ -34,6 +34,7 @@ All notable changes to the Tepid-H1 project will be documented in this file.
 - Added local GPU readiness tier reporting.
 - Added configurable local GPU operator-memory threshold.
 - Added configurable local GPU scale-training memory threshold.
+- Added public API reference documentation with export drift coverage.
 - Removed accidental local installer/null artifacts from the tracked tree.
 - Type annotation for `attn_bias` parameter in `model.py`
 - Removed redundant `num_kv_heads` parameter from `TepidH1CausalLM`
