@@ -7,7 +7,7 @@ import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import Tensor, nn
@@ -283,6 +283,8 @@ def load_checkpoint(
         raise TypeError("checkpoint optimizer_state must be a mapping")
     if not isinstance(rng_state, Tensor):
         raise TypeError("checkpoint rng_state must be a tensor")
+    if scheduler is not None:
+        _validate_checkpoint_scheduler_state(scheduler_state, scheduler, step)
 
     model.load_state_dict(model_state, strict=True)
     if optimizer is not None:
@@ -290,11 +292,7 @@ def load_checkpoint(
             raise TypeError("checkpoint optimizer_state must be a mapping")
         optimizer.load_state_dict(optimizer_state)
     if scheduler is not None:
-        if not isinstance(scheduler_state, Mapping):
-            raise TypeError("checkpoint scheduler_state must be a mapping")
-        scheduler.load_state_dict(scheduler_state)
-        if scheduler.completed_steps != step:
-            raise ValueError("checkpoint scheduler step does not match checkpoint step")
+        scheduler.load_state_dict(cast(Mapping[str, Any], scheduler_state))
     torch.set_rng_state(rng_state.cpu())
     cuda_rng_states = payload.get("cuda_rng_states", [])
     if torch.cuda.is_available() and cuda_rng_states:
@@ -306,6 +304,34 @@ def _serialized_model_config(model: TrainableCausalLM) -> dict[str, Any]:
     if isinstance(model, TransformerBaselineCausalLM):
         return model.baseline_config.to_dict()
     return model.config.to_dict()
+
+
+def _validate_checkpoint_scheduler_state(
+    scheduler_state: Any,
+    scheduler: WarmupCosineScheduler,
+    step: int,
+) -> None:
+    if not isinstance(scheduler_state, Mapping):
+        raise TypeError("checkpoint scheduler_state must be a mapping")
+    expected = {
+        "schema_version": 1,
+        "warmup_steps": scheduler.warmup_steps,
+        "total_steps": scheduler.total_steps,
+        "min_lr_ratio": scheduler.min_lr_ratio,
+        "base_lrs": list(scheduler.base_lrs),
+    }
+    actual = {key: scheduler_state.get(key) for key in expected}
+    if actual != expected:
+        raise ValueError("checkpoint learning-rate schedule does not match the current run")
+    completed_steps = scheduler_state.get("completed_steps")
+    if (
+        not isinstance(completed_steps, int)
+        or isinstance(completed_steps, bool)
+        or not 0 <= completed_steps <= scheduler.total_steps
+    ):
+        raise ValueError("checkpoint scheduler step is invalid")
+    if completed_steps != step:
+        raise ValueError("checkpoint scheduler step does not match checkpoint step")
 
 
 def _count_supervised_target_tokens(
