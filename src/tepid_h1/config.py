@@ -56,6 +56,7 @@ class TepidH1Config:
     tie_word_embeddings: bool = True
     initializer_range: float = 0.02
     global_reference_max_tokens: int = 2048
+    global_sparse_stride: int = 128
     rotary_theta: float = 10_000.0
 
     def __post_init__(self) -> None:
@@ -74,6 +75,10 @@ class TepidH1Config:
             errors.append("local_window must be positive")
         if self.max_position_embeddings < self.local_window:
             errors.append("max_position_embeddings must be >= local_window")
+        if self.global_reference_max_tokens <= 0:
+            errors.append("global_reference_max_tokens must be positive")
+        if self.global_sparse_stride <= 0:
+            errors.append("global_sparse_stride must be positive")
         if not 0.0 <= self.dropout < 1.0:
             errors.append("dropout must be in [0, 1)")
         if self.rotary_theta <= 0:
@@ -121,6 +126,7 @@ class TepidH1Config:
             moe_shared_intermediate_size=768,
             max_position_embeddings=2048,
             global_reference_max_tokens=512,
+            global_sparse_stride=32,
         )
 
     @classmethod
@@ -141,6 +147,7 @@ class TepidH1Config:
             moe_shared_intermediate_size=64,
             max_position_embeddings=64,
             global_reference_max_tokens=64,
+            global_sparse_stride=8,
         )
 
     @classmethod

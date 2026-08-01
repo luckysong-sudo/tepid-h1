@@ -370,13 +370,35 @@ class GQAAttentionNative(GQAAttentionReference):
         )
 
 
-class GlobalSparseAttentionReference(nn.Module):
-    """Short-sequence full-attention oracle for future NSA backend comparisons."""
+class GlobalSparseAttentionReference(GQAAttentionNative):
+    """Deterministic sparse causal attention reference for global slots."""
 
     def __init__(self, config: TepidH1Config) -> None:
-        super().__init__()
+        super().__init__(config, local_window=None)
         self.max_tokens = config.global_reference_max_tokens
-        self.full_attention = GQAAttentionNative(config, local_window=None)
+        self.sparse_window = config.local_window
+        self.global_stride = config.global_sparse_stride
+
+    def _attention_mask(
+        self,
+        query_length: int,
+        key_length: int,
+        past_length: int,
+        device: torch.device,
+    ) -> Tensor:
+        query_positions = past_length + torch.arange(query_length, device=device)[:, None]
+        key_positions = torch.arange(key_length, device=device)[None, :]
+        causal = key_positions <= query_positions
+        local = key_positions > query_positions - self.sparse_window
+        global_anchor = key_positions.remainder(self.global_stride) == 0
+        return causal & (local | global_anchor)
+
+    def _validate_state(self, state: AttentionState, batch_size: int) -> None:
+        super()._validate_state(state, batch_size)
+        if state.tokens_seen != state.key.shape[2]:
+            raise ValueError(
+                "global sparse attention state must retain the complete cached history"
+            )
 
     def forward(
         self,
@@ -389,4 +411,4 @@ class GlobalSparseAttentionReference(nn.Module):
                 "global sparse production kernel is not implemented; "
                 f"reference fallback is limited to {self.max_tokens} total cached tokens"
             )
-        return self.full_attention(x, state)
+        return super().forward(x, state)

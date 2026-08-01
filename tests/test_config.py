@@ -49,6 +49,16 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "rotary_theta"):
             replace(config, rotary_theta=0)
 
+    def test_global_sparse_stride_is_validated(self) -> None:
+        config = TepidH1Config.smoke()
+        with self.assertRaisesRegex(ValueError, "global_sparse_stride"):
+            replace(config, global_sparse_stride=0)
+
+    def test_global_reference_token_limit_is_validated(self) -> None:
+        config = TepidH1Config.smoke()
+        with self.assertRaisesRegex(ValueError, "global_reference_max_tokens"):
+            replace(config, global_reference_max_tokens=0)
+
 
 if __name__ == "__main__":
     unittest.main()

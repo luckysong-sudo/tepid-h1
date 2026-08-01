@@ -286,6 +286,67 @@ class ModelTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "max_position_embeddings"):
             layer(x)
 
+    def test_global_sparse_attention_mask_keeps_local_window_and_global_anchors(self):
+        from dataclasses import replace
+
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GlobalSparseAttentionReference
+
+        config = replace(TepidH1Config.smoke(), local_window=4, global_sparse_stride=3)
+        layer = GlobalSparseAttentionReference(config).eval()
+
+        mask = layer._attention_mask(
+            query_length=2,
+            key_length=10,
+            past_length=8,
+            device=torch.device("cpu"),
+        )
+
+        self.assertEqual(torch.where(mask[0])[0].tolist(), [0, 3, 5, 6, 7, 8])
+        self.assertEqual(torch.where(mask[1])[0].tolist(), [0, 3, 6, 7, 8, 9])
+
+    def test_global_sparse_attention_chunk_boundary_matches_single_pass(self):
+        from dataclasses import replace
+
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GlobalSparseAttentionReference
+
+        torch.manual_seed(31)
+        config = replace(TepidH1Config.smoke(), local_window=4, global_sparse_stride=3)
+        layer = GlobalSparseAttentionReference(config).eval()
+        x = torch.randn(1, 10, config.hidden_size)
+
+        full_output, full_state = layer(x)
+        first_output, state = layer(x[:, :6])
+        second_output, chunked_state = layer(x[:, 6:], state)
+        chunked_output = torch.cat((first_output, second_output), dim=1)
+
+        torch.testing.assert_close(chunked_output, full_output, rtol=1e-5, atol=1e-6)
+        torch.testing.assert_close(chunked_state.key, full_state.key)
+        torch.testing.assert_close(chunked_state.value, full_state.value)
+        self.assertEqual(chunked_state.tokens_seen, 10)
+
+    def test_global_sparse_attention_rejects_trimmed_state(self):
+        from dataclasses import replace
+
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import (
+            AttentionState,
+            GlobalSparseAttentionReference,
+        )
+
+        config = replace(TepidH1Config.smoke(), local_window=4, global_sparse_stride=3)
+        layer = GlobalSparseAttentionReference(config).eval()
+        x = torch.randn(1, 2, config.hidden_size)
+        state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, 3, config.head_dim),
+            value=torch.randn(1, config.num_kv_heads, 3, config.head_dim),
+            tokens_seen=8,
+        )
+
+        with self.assertRaisesRegex(ValueError, "complete cached history"):
+            layer(x, state)
+
 
 if __name__ == "__main__":
     unittest.main()

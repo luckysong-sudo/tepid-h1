@@ -29,7 +29,7 @@ integration code that should not need to know the internal package layout.
 - `LoRAAdapter` - low-rank adaptation module.
 - `LoRAConfig` - LoRA configuration.
 - `GQAAttentionReference` - correctness reference for grouped-query attention.
-- `GlobalSparseAttentionReference` - short-sequence full-attention fallback for global slots.
+- `GlobalSparseAttentionReference` - deterministic sparse attention reference for global slots.
 - `GatedDeltaMemoryEager` - eager Delta memory implementation.
 - `GatedDeltaMemoryReference` - token-loop Delta memory oracle.
 - `LayerSpec` - macro-block layer descriptor.
@@ -166,7 +166,7 @@ baseline helpers.
 - `AttentionState` - local-attention streaming state.
 - `GQAAttentionNative` - native grouped-query attention.
 - `GQAAttentionReference` - explicit GQA correctness reference.
-- `GlobalSparseAttentionReference` - full-attention fallback for global reference slots.
+- `GlobalSparseAttentionReference` - local-window plus global-anchor sparse attention reference.
 - `GatedDeltaMemoryEager` - eager Delta memory path.
 - `GatedDeltaMemoryReference` - reference Delta oracle.
 - `RoutedMoEReference` - reference routed MoE layer.

@@ -61,14 +61,16 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="reference_architecture",
-        percent=72,
+        percent=76,
         evidence=(
             "macro-block config, Delta, GQA, MoE and matched baseline are implemented",
             "streaming/chunking state contracts have unit coverage",
+            "global sparse attention now uses deterministic local-window plus "
+            "global-anchor sparsity",
         ),
         gaps=(
-            "global sparse attention is still a full-attention reference fallback",
-            "reference operators are not scale-ready production kernels",
+            "reference sparse attention is not yet a production fused kernel",
+            "Delta and MoE reference operators are not scale-ready production kernels",
         ),
     ),
     StatusDimension(
@@ -97,12 +99,13 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="backend_performance",
-        percent=40,
+        percent=43,
         evidence=(
             "Delta backend validation compares forward, state and gradients",
             "Delta benchmark matrix reports shape-level throughput and qualification status",
             "MoE benchmark matrix reports routing load and reference throughput",
             "eager Delta and native GQA reduce some reference overhead",
+            "global sparse attention uses a sparse causal pattern in the reference path",
         ),
         gaps=(
             "Triton/CUDA/Inductor optimized Delta, NSA and MoE kernels are not complete",
