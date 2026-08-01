@@ -8,6 +8,8 @@ from typing import Any
 
 import torch
 
+LEGACY_NVIDIA_DRIVER_MAJOR = 450
+
 
 @dataclass(frozen=True)
 class LocalGPUPreflightConfig:
@@ -105,14 +107,27 @@ def _parse_nvidia_smi_query(output: str) -> list[dict[str, Any]]:
             memory_total = int(memory_total_mib)
         except ValueError:
             memory_total = None
+        driver_major = _driver_major(driver_version)
         gpus.append(
             {
                 "name": name,
                 "driver_version": driver_version,
+                "driver_major": driver_major,
+                "legacy_driver": (
+                    driver_major is not None and driver_major < LEGACY_NVIDIA_DRIVER_MAJOR
+                ),
                 "memory_total_mib": memory_total,
             }
         )
     return gpus
+
+
+def _driver_major(driver_version: str) -> int | None:
+    major, _, _ = driver_version.partition(".")
+    try:
+        return int(major)
+    except ValueError:
+        return None
 
 
 def _torch_probe() -> dict[str, Any]:
@@ -170,6 +185,11 @@ def _recommended_actions(
     actions = []
     if not hardware_probe["gpus"]:
         actions.append("install or expose an NVIDIA driver so nvidia-smi reports the GPU")
+    if any(gpu.get("legacy_driver") for gpu in hardware_probe["gpus"]):
+        actions.append(
+            "upgrade or align the NVIDIA driver before installing a modern CUDA-enabled "
+            "PyTorch build"
+        )
     if torch_probe["cuda_runtime"] is None:
         actions.append("install a CUDA-enabled PyTorch build in the active virtual environment")
     if not torch_probe["cuda_available"] and torch_probe["cuda_runtime"] is not None:

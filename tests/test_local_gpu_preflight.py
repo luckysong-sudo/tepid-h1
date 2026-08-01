@@ -16,6 +16,8 @@ class LocalGPUPreflightTests(unittest.TestCase):
                 {
                     "name": "GeForce MX150",
                     "driver_version": "388.73",
+                    "driver_major": 388,
+                    "legacy_driver": True,
                     "memory_total_mib": 2048,
                 }
             ],
@@ -51,6 +53,17 @@ class LocalGPUPreflightTests(unittest.TestCase):
 
         self.assertIn("CUDA-enabled PyTorch", " ".join(actions))
         self.assertIn("rerun gpu-preflight", " ".join(actions))
+
+    def test_legacy_driver_action_is_reported(self):
+        from tepid_h1.integrations.local_gpu import _recommended_actions
+
+        actions = _recommended_actions(
+            {"gpus": [{"name": "GeForce MX150", "legacy_driver": True}]},
+            {"cuda_runtime": None, "cuda_available": False},
+            ["installed PyTorch build does not include CUDA"],
+        )
+
+        self.assertIn("NVIDIA driver", " ".join(actions))
 
 
 if __name__ == "__main__":

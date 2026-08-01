@@ -18,6 +18,8 @@ Observed host GPU:
 - `nvidia-smi`: found at `C:/Program Files/NVIDIA Corporation/NVSMI/nvidia-smi.exe`
 - GPU: `GeForce MX150`
 - Driver: `388.73`
+- Driver major: `388`
+- Driver status: legacy for modern CUDA-enabled PyTorch builds
 - Memory: `2048 MiB`
 
 Observed Python runtime:
@@ -34,8 +36,9 @@ Current blocker:
 
 Required next actions:
 
+- Upgrade or align the NVIDIA driver before installing a modern CUDA-enabled PyTorch
+  build.
 - Install a CUDA-enabled PyTorch build in the active virtual environment.
-- Align or upgrade the NVIDIA driver if the selected PyTorch CUDA runtime requires it.
 - Rerun `tepid-h1 gpu-preflight` before treating `delta-benchmark --device cuda`,
   `moe-benchmark --device cuda`, or `compare-smoke --device cuda` results as local CUDA
   evidence.

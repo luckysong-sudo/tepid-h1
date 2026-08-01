@@ -45,6 +45,8 @@ current Windows host, `nvidia-smi` reports a GeForce MX150 with driver 388.73, w
 active project environment reports `torch 2.13.0+cpu`, no CUDA runtime and
 `torch.cuda.is_available() == false`. That means the local GPU is visible to the OS but
 cannot yet execute Tepid-H1 CUDA paths from this virtual environment.
+The preflight marks the 388-series driver as legacy for modern CUDA-enabled PyTorch
+builds and recommends driver alignment before CUDA wheel installation.
 The current evidence snapshot is recorded in `docs/LOCAL_GPU_EVIDENCE.md`.
 
 CUDA timing synchronizes the device immediately before and after every measured training
