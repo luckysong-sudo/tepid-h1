@@ -14,6 +14,7 @@ EXPECTED_SUBCOMMANDS = [
     "decontaminate",
     "delta-benchmark",
     "delta-validate",
+    "moe-benchmark",
     "plan",
     "project-status",
     "retrieval-generate",
@@ -158,6 +159,26 @@ class CLIParserTests(unittest.TestCase):
             ]
         )
         self.assertEqual(args.command, "delta-benchmark")
+        self.assertEqual(args.sequence_lengths, [2])
+        self.assertEqual(args.iterations, 1)
+
+    def test_moe_benchmark_command(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "moe-benchmark",
+                "--variant",
+                "prototype",
+                "--length",
+                "2",
+                "--iterations",
+                "1",
+            ]
+        )
+        self.assertEqual(args.command, "moe-benchmark")
+        self.assertEqual(args.variant, "prototype")
         self.assertEqual(args.sequence_lengths, [2])
         self.assertEqual(args.iterations, 1)
 

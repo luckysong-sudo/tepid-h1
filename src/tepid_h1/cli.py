@@ -200,6 +200,31 @@ def build_parser() -> argparse.ArgumentParser:
     delta_benchmark.add_argument("--seed", type=int, default=71)
     delta_benchmark.add_argument("--target-device-label")
     delta_benchmark.add_argument("--report", type=Path)
+    moe_benchmark = subparsers.add_parser(
+        "moe-benchmark",
+        help="benchmark reference MoE routing load and throughput across sequence lengths",
+    )
+    moe_benchmark.add_argument(
+        "--variant",
+        choices=("smoke", "prototype"),
+        default="smoke",
+    )
+    moe_benchmark.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    moe_benchmark.add_argument(
+        "--dtype",
+        choices=("float32", "bfloat16", "float16"),
+        default="float32",
+    )
+    moe_benchmark.add_argument("--batch-size", type=int, default=1)
+    moe_benchmark.add_argument(
+        "--length",
+        type=int,
+        action="append",
+        dest="sequence_lengths",
+    )
+    moe_benchmark.add_argument("--iterations", type=int, default=3)
+    moe_benchmark.add_argument("--seed", type=int, default=97)
+    moe_benchmark.add_argument("--report", type=Path)
     corpus_stats = subparsers.add_parser(
         "corpus-stats",
         help="summarize a governed paired-corpus JSONL file",
@@ -657,6 +682,25 @@ def main() -> int:
         )
         _write_payload(benchmark_payload, args.report)
         return 0 if benchmark_payload["summary"]["all_numerical_passed"] else 9
+    if args.command == "moe-benchmark":
+        from .evaluation.moe_backend import (
+            RoutedMoEBenchmarkConfig,
+            benchmark_routed_moe,
+        )
+
+        moe_payload = benchmark_routed_moe(
+            RoutedMoEBenchmarkConfig(
+                variant=args.variant,
+                device=args.device,
+                dtype=args.dtype,
+                batch_size=args.batch_size,
+                sequence_lengths=tuple(args.sequence_lengths or (4, 8, 16)),
+                iterations=args.iterations,
+                seed=args.seed,
+            )
+        )
+        _write_payload(moe_payload, args.report)
+        return 0
     if args.command == "compare-smoke":
         from .experiments import (
             PairedExperimentConfig,

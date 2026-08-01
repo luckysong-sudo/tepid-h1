@@ -57,5 +57,24 @@ The current smoke configuration is intentionally tiny. A successful CUDA report 
 device compatibility and measurement plumbing only; it is not the M1 350M target-hardware
 benchmark.
 
+Reference MoE routing benchmark:
+
+```bash
+tepid-h1 moe-benchmark \
+  --variant smoke \
+  --device cpu \
+  --dtype float32 \
+  --length 4 \
+  --length 8 \
+  --length 16 \
+  --iterations 3 \
+  --report artifacts/moe-benchmark-matrix.json
+```
+
+The MoE benchmark records per-shape reference throughput, expert assignment counts,
+active expert count and router entropy. It is intended to make future grouped-GEMM or
+fused-dispatch candidates comparable against the current correctness-first reference
+path; it is not itself an optimized-kernel claim.
+
 The first verified ZeroGPU BF16 execution and its explicit limitations are recorded in
 `docs/ZEROGPU_EVIDENCE.md`.
