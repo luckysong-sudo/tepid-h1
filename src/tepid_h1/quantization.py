@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import torch
 from torch import nn
@@ -416,22 +416,59 @@ def apply_quantized_model(
     quantized_layers: dict[str, QuantizedLayer],
 ) -> nn.Module:
     """Replace linear layers with quantized equivalents for inference."""
+    resolved_layers: list[tuple[nn.Linear, QuantizedLayer, torch.Tensor]] = []
     for name, quantized in quantized_layers.items():
-        parts = [p for p in name.split(".") if p]
-        current: nn.Module = model
-        for part in parts:
-            if part.isdigit():
-                current = cast(nn.Sequential, current)[int(part)]
-            else:
-                current = getattr(current, part)
-        if isinstance(current, nn.Linear):
-            dequantized = quantized.dequantize()
-            current.weight = nn.Parameter(dequantized, requires_grad=False)
-            if quantized.bias is not None:
-                current.bias = nn.Parameter(quantized.bias, requires_grad=False)
-            else:
-                current.register_parameter("bias", None)
+        current = _resolve_module_path(model, name)
+        if not isinstance(current, nn.Linear):
+            raise ValueError(f"quantized layer target {name!r} is not an nn.Linear")
+        if tuple(current.weight.shape) != quantized.original_shape:
+            raise ValueError(
+                f"quantized layer {name!r} original_shape {quantized.original_shape!r} "
+                f"does not match target weight shape {tuple(current.weight.shape)!r}"
+            )
+        if (current.bias is None) != (quantized.bias is None):
+            raise ValueError(f"quantized layer {name!r} bias presence does not match target")
+        if current.bias is not None and quantized.bias is not None:
+            if tuple(current.bias.shape) != tuple(quantized.bias.shape):
+                raise ValueError(f"quantized layer {name!r} bias shape does not match target")
+
+        dequantized = quantized.dequantize()
+        if tuple(dequantized.shape) != tuple(current.weight.shape):
+            raise ValueError(f"quantized layer {name!r} dequantized weight shape is invalid")
+        resolved_layers.append((current, quantized, dequantized))
+
+    for current, quantized, dequantized in resolved_layers:
+        current.weight = nn.Parameter(
+            dequantized.to(device=current.weight.device, dtype=current.weight.dtype),
+            requires_grad=False,
+        )
+        if current.bias is not None and quantized.bias is not None:
+            current.bias = nn.Parameter(
+                quantized.bias.to(device=current.bias.device, dtype=current.bias.dtype),
+                requires_grad=False,
+            )
     return model
+
+
+def _resolve_module_path(model: nn.Module, name: str) -> nn.Module:
+    current: nn.Module = model
+    for part in [p for p in name.split(".") if p]:
+        if part.isdigit():
+            if not isinstance(current, (nn.Sequential, nn.ModuleList)):
+                raise ValueError(f"module path {name!r} indexes non-sequential module")
+            index = int(part)
+            try:
+                current = current[index]
+            except IndexError as error:
+                raise ValueError(f"module path {name!r} index {index} is out of range") from error
+            continue
+        if not hasattr(current, part):
+            raise ValueError(f"module path {name!r} does not exist")
+        child = getattr(current, part)
+        if not isinstance(child, nn.Module):
+            raise ValueError(f"module path {name!r} resolves through non-module attribute")
+        current = child
+    return current
 
 
 def save_quantized_model(

@@ -197,6 +197,54 @@ class TestApplyQuantizedModel:
         qlayers = quantize_model(model, cfg)
         apply_quantized_model(model, qlayers)
         assert model.weight.shape == (4, 8)
+        assert model.weight.requires_grad is False
+
+    def test_apply_rejects_missing_layer_path(self) -> None:
+        model = nn.Sequential(nn.Linear(8, 4))
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        qlayers = quantize_model(model, cfg)
+
+        with pytest.raises(ValueError, match="does not exist"):
+            apply_quantized_model(model, {"missing": qlayers["0"]})
+
+    def test_apply_rejects_non_linear_target(self) -> None:
+        model = nn.Sequential(nn.Linear(8, 4), nn.ReLU())
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        qlayers = quantize_model(model, cfg)
+
+        with pytest.raises(ValueError, match="not an nn.Linear"):
+            apply_quantized_model(model, {"1": qlayers["0"]})
+
+    def test_apply_rejects_shape_mismatch_without_partial_mutation(self) -> None:
+        model = nn.Sequential(nn.Linear(8, 4), nn.ReLU(), nn.Linear(4, 2))
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        qlayers = quantize_model(model, cfg)
+        good_first = qlayers["0"]
+        bad_second = QuantizedLayer(
+            weight=qlayers["2"].weight,
+            bias=qlayers["2"].bias,
+            scales=qlayers["2"].scales,
+            zeros=qlayers["2"].zeros,
+            original_dtype=qlayers["2"].original_dtype,
+            quantization_mode=qlayers["2"].quantization_mode,
+            original_shape=(3, 4),
+        )
+        first_before = model[0].weight.detach().clone()
+
+        with pytest.raises(ValueError, match="original_shape"):
+            apply_quantized_model(model, {"0": good_first, "2": bad_second})
+
+        assert torch.equal(model[0].weight, first_before)
+        assert model[0].weight.requires_grad is True
+
+    def test_apply_rejects_bias_presence_mismatch(self) -> None:
+        source = nn.Linear(8, 4, bias=False)
+        target = nn.Linear(8, 4, bias=True)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        qlayers = quantize_model(source, cfg)
+
+        with pytest.raises(ValueError, match="bias presence"):
+            apply_quantized_model(target, qlayers)
 
 
 class TestSaveQuantizedModel:
