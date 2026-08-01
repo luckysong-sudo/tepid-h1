@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import platform
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -60,7 +61,11 @@ def benchmark_routed_moe(config: RoutedMoEBenchmarkConfig) -> dict[str, Any]:
             generator=generator,
         )
         input_tensor = input_cpu.to(device=device, dtype=dtype)
-        timing = _benchmark_layer(
+        oracle_output = _dispatch_oracle_output(layer, input_tensor)
+        grouped_output = layer(input_tensor)
+        max_abs_error = float((oracle_output - grouped_output).detach().float().abs().max())
+        numerical_passed = bool(torch.allclose(oracle_output, grouped_output, rtol=1e-5, atol=1e-6))
+        timing = _benchmark_pair(
             layer,
             input_tensor,
             iterations=config.iterations,
@@ -69,14 +74,23 @@ def benchmark_routed_moe(config: RoutedMoEBenchmarkConfig) -> dict[str, Any]:
         cases.append(
             {
                 "sequence_length": sequence_length,
+                "batch_tokens": input_tensor.shape[0] * input_tensor.shape[1],
                 "tokens": timing["tokens"],
-                "elapsed_seconds": timing["elapsed_seconds"],
-                "tokens_per_second": timing["tokens_per_second"],
+                "dispatch_oracle_elapsed_seconds": timing["dispatch_oracle_elapsed_seconds"],
+                "grouped_elapsed_seconds": timing["grouped_elapsed_seconds"],
+                "elapsed_seconds": timing["grouped_elapsed_seconds"],
+                "dispatch_oracle_tokens_per_second": timing["dispatch_oracle_tokens_per_second"],
+                "grouped_tokens_per_second": timing["grouped_tokens_per_second"],
+                "tokens_per_second": timing["grouped_tokens_per_second"],
+                "grouped_over_dispatch_speedup": timing["grouped_over_dispatch_speedup"],
+                "numerical_passed": numerical_passed,
+                "max_abs_error": max_abs_error,
                 "router": _router_report(layer, model_config.moe_top_k),
             }
         )
 
     throughputs = [case["tokens_per_second"] for case in cases]
+    speedups = [case["grouped_over_dispatch_speedup"] for case in cases]
     return {
         "schema_version": 1,
         "experiment": "routed_moe_benchmark_matrix",
@@ -93,13 +107,17 @@ def benchmark_routed_moe(config: RoutedMoEBenchmarkConfig) -> dict[str, Any]:
         "cases": cases,
         "summary": {
             "case_count": len(cases),
+            "all_numerical_passed": all(case["numerical_passed"] for case in cases),
             "min_tokens_per_second": min(throughputs),
             "max_tokens_per_second": max(throughputs),
+            "min_grouped_over_dispatch_speedup": min(speedups),
+            "max_grouped_over_dispatch_speedup": max(speedups),
         },
         "interpretation": (
-            "This is a reference MoE dispatch benchmark fixture. It records routing load "
-            "and local throughput for future grouped-GEMM or fused-dispatch candidates; "
-            "it is not an optimized MoE kernel qualification."
+            "This benchmark compares the grouped selected-expert evaluator against a "
+            "per-expert dispatch oracle. It records numerical parity, routing load and "
+            "local throughput for future grouped-GEMM or fused-dispatch candidates; it "
+            "is not an optimized MoE kernel qualification."
         ),
     }
 
@@ -112,7 +130,7 @@ def _model_config(variant: str) -> TepidH1Config:
     raise AssertionError(f"unsupported variant: {variant}")
 
 
-def _benchmark_layer(
+def _benchmark_pair(
     layer: RoutedMoEReference,
     input_tensor: Tensor,
     *,
@@ -120,8 +138,41 @@ def _benchmark_layer(
     device: torch.device,
 ) -> dict[str, float | int]:
     layer.eval()
+    dispatch_timing = _benchmark_callable(
+        lambda tensor: _dispatch_oracle_output(layer, tensor),
+        input_tensor,
+        iterations=iterations,
+        device=device,
+    )
+    grouped_timing = _benchmark_callable(
+        layer,
+        input_tensor,
+        iterations=iterations,
+        device=device,
+    )
+
+    return {
+        "iterations": iterations,
+        "tokens": grouped_timing["tokens"],
+        "dispatch_oracle_elapsed_seconds": dispatch_timing["elapsed_seconds"],
+        "grouped_elapsed_seconds": grouped_timing["elapsed_seconds"],
+        "dispatch_oracle_tokens_per_second": dispatch_timing["tokens_per_second"],
+        "grouped_tokens_per_second": grouped_timing["tokens_per_second"],
+        "grouped_over_dispatch_speedup": (
+            grouped_timing["tokens_per_second"] / dispatch_timing["tokens_per_second"]
+        ),
+    }
+
+
+def _benchmark_callable(
+    function: Callable[[Tensor], Tensor],
+    input_tensor: Tensor,
+    *,
+    iterations: int,
+    device: torch.device,
+) -> dict[str, float | int]:
     with torch.no_grad():
-        layer(input_tensor)
+        function(input_tensor)
     _synchronize(device)
 
     elapsed = 0.0
@@ -129,7 +180,7 @@ def _benchmark_layer(
         for _ in range(iterations):
             _synchronize(device)
             started = time.perf_counter()
-            layer(input_tensor)
+            function(input_tensor)
             _synchronize(device)
             elapsed += time.perf_counter() - started
 
@@ -140,6 +191,24 @@ def _benchmark_layer(
         "elapsed_seconds": elapsed,
         "tokens_per_second": tokens / elapsed,
     }
+
+
+def _dispatch_oracle_output(layer: RoutedMoEReference, input_tensor: Tensor) -> Tensor:
+    original_shape = input_tensor.shape
+    flat = input_tensor.reshape(-1, original_shape[-1])
+    probabilities = layer.router(flat).softmax(dim=-1)
+    weights, indices = probabilities.topk(layer.top_k, dim=-1)
+    weights = weights / weights.sum(dim=-1, keepdim=True)
+
+    routed = torch.zeros_like(flat)
+    for expert_index, expert in enumerate(layer.experts):
+        token_indices, slots = (indices == expert_index).nonzero(as_tuple=True)
+        if token_indices.numel() == 0:
+            continue
+        expert_output = expert(flat[token_indices])
+        expert_output = expert_output * weights[token_indices, slots].unsqueeze(-1)
+        routed.index_add_(0, token_indices, expert_output)
+    return (layer.shared_expert(flat) + routed).reshape(original_shape)
 
 
 def _router_report(layer: RoutedMoEReference, top_k: int) -> dict[str, Any]:

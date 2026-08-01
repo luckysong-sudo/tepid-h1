@@ -126,11 +126,11 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="backend_performance",
-        percent=54,
+        percent=55,
         evidence=(
             "Delta backend validation compares forward, state and gradients",
             "Delta benchmark matrix reports shape-level throughput and qualification status",
-            "MoE benchmark matrix reports routing load and reference throughput",
+            "MoE benchmark matrix reports routing load, oracle parity and grouped throughput",
             "eager Delta and native GQA reduce some reference overhead",
             "global sparse attention uses a sparse causal pattern in the reference path",
             "MoE routed experts use grouped selected-expert matmuls instead of "
