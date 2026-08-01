@@ -90,7 +90,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="training_and_evaluation",
-        percent=76,
+        percent=77,
         evidence=(
             "smoke training, checkpoint resume and validation contracts are implemented",
             "retrieval generation/scoring and paired baseline reports are covered",
@@ -101,6 +101,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "repetition penalty uses generated-token history during autoregressive decoding",
             "top-k and nucleus sampling filters handle vocabulary-index boundaries correctly",
             "autoregressive sampling suppresses pad tokens while preserving eos stop tokens",
+            "batched generation masks rows that have already emitted eos",
         ),
         gaps=(
             "no decision-grade long-window model quality experiment exists yet",

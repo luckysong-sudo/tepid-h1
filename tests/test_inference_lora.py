@@ -1,5 +1,7 @@
 """Integration tests for InferenceEngine and LoRA adapter."""
 
+from types import SimpleNamespace
+
 import pytest
 import torch
 import torch.nn as nn
@@ -8,6 +10,7 @@ from tepid_h1.config import TepidH1Config
 from tepid_h1.inference import (
     GenerateConfig,
     InferenceEngine,
+    _apply_finished_sequence_mask,
     _apply_repetition_penalty,
     _suppress_pad_token,
     _top_k_filter,
@@ -255,6 +258,56 @@ class TestInferenceEngine:
             ),
         )
         assert generated.shape[1] <= 3 + 2
+
+    def test_generate_masks_finished_batch_rows_after_eos(self):
+        class BatchEosModel:
+            config = TepidH1Config.smoke()
+
+            def __init__(self):
+                self.calls = 0
+
+            def eval(self):
+                return self
+
+            def __call__(self, input_ids, delta_states=None, attention_states=None):
+                self.calls += 1
+                logits = torch.full((input_ids.shape[0], input_ids.shape[1], 8), -100.0)
+                if self.calls == 2:
+                    logits[0, -1, 4] = 10.0
+                    logits[1, -1, 5] = 10.0
+                else:
+                    logits[0, -1, 6] = 10.0
+                    logits[1, -1, 7] = 10.0
+                return SimpleNamespace(
+                    logits=logits,
+                    delta_states=None,
+                    attention_states=None,
+                )
+
+        engine = InferenceEngine(BatchEosModel(), use_kv_cache=True)
+
+        generated, metadata = engine.generate(
+            torch.tensor([[1], [2]]),
+            config=GenerateConfig(
+                max_new_tokens=3,
+                do_sample=False,
+                pad_token_id=0,
+                eos_token_id=4,
+            ),
+        )
+
+        assert torch.equal(generated[0], torch.tensor([1, 4, 0, 0]))
+        assert torch.equal(generated[1], torch.tensor([2, 5, 7, 7]))
+        assert metadata["new_tokens"] == 3
+
+    def test_finished_sequence_mask_requires_matching_shape(self):
+        with pytest.raises(ValueError, match="finished_sequences"):
+            _apply_finished_sequence_mask(
+                torch.tensor([[1], [2]]),
+                torch.tensor([[False]]),
+                pad_token_id=0,
+                eos_token_id=4,
+            )
 
     def test_decode_text(self, engine):
         """Test text decoding."""

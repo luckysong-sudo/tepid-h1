@@ -192,6 +192,8 @@ class InferenceEngine:
                 )
             batch_size *= effective_config.num_return_sequences
 
+        finished_sequences = torch.zeros(batch_size, 1, dtype=torch.bool, device=device)
+
         # Autoregressive decoding
         for step in range(effective_config.max_new_tokens):
             # Ensure states are tuples (or None) for model forward
@@ -219,12 +221,21 @@ class InferenceEngine:
                 do_sample=effective_config.do_sample,
             )
 
+            if effective_config.eos_token_id is not None:
+                next_token_ids = _apply_finished_sequence_mask(
+                    next_token_ids,
+                    finished_sequences,
+                    pad_token_id=effective_config.pad_token_id,
+                    eos_token_id=effective_config.eos_token_id,
+                )
+                finished_sequences = finished_sequences | (
+                    next_token_ids == effective_config.eos_token_id
+                )
+
             generated_ids = torch.cat([generated_ids, next_token_ids], dim=1)
 
-            if effective_config.eos_token_id is not None:
-                eos_mask = next_token_ids == effective_config.eos_token_id
-                if eos_mask.all():
-                    break
+            if finished_sequences.all():
+                break
 
         metadata = {
             "input_length": original_length,
@@ -321,6 +332,24 @@ def _suppress_pad_token(
     filtered = logits.clone()
     filtered[:, pad_token_id] = float("-inf")
     return filtered
+
+
+def _apply_finished_sequence_mask(
+    next_token_ids: Tensor,
+    finished_sequences: Tensor,
+    *,
+    pad_token_id: int | None,
+    eos_token_id: int,
+) -> Tensor:
+    """Keep already-finished sequences from generating new content."""
+    if next_token_ids.shape != finished_sequences.shape:
+        raise ValueError("finished_sequences must match next_token_ids shape")
+    if not bool(finished_sequences.any().item()):
+        return next_token_ids
+
+    fill_token_id = eos_token_id if pad_token_id is None else pad_token_id
+    fill_tokens = torch.full_like(next_token_ids, fill_token_id)
+    return torch.where(finished_sequences, fill_tokens, next_token_ids)
 
 
 def _top_k_filter(logits: Tensor, top_k: int) -> Tensor:
