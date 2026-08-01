@@ -190,5 +190,11 @@ class TransformerBaselineCausalLM(nn.Module):
         output = self.model(input_ids, attention_states=attention_states)
         output.logits = self.lm_head(output.last_hidden_state)
         if labels is not None:
-            output.loss = _causal_lm_loss(output.logits, input_ids, labels, self.config.vocab_size)
+            output.language_model_loss = _causal_lm_loss(
+                output.logits,
+                input_ids,
+                labels,
+                self.config.vocab_size,
+            )
+            output.loss = output.language_model_loss
         return output

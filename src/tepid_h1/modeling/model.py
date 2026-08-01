@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 import torch
 from torch import Tensor, nn
@@ -63,7 +64,7 @@ class TepidH1Block(nn.Module):
         *,
         delta_state: Tensor | None = None,
         attention_state: AttentionState | None = None,
-    ) -> tuple[Tensor, Tensor | None, AttentionState | None]:
+    ) -> tuple[Tensor, Tensor | None, AttentionState | None, Tensor | None]:
         normalized = self.sequence_norm(x)
         next_delta_state: Tensor | None = None
         next_attention_state: AttentionState | None = None
@@ -76,8 +77,12 @@ class TepidH1Block(nn.Module):
                 raise ValueError("attention layers do not accept Delta state")
             mixed, next_attention_state = self.sequence_mixer(normalized, attention_state)
         x = x + self.alpha.tanh() * mixed
-        x = x + self.beta.tanh() * self.channel_mixer(self.channel_norm(x))
-        return x, next_delta_state, next_attention_state
+        channel_output = self.channel_mixer(self.channel_norm(x))
+        aux_loss: Tensor | None = None
+        if self.channel_kind is ChannelMixer.MOE:
+            aux_loss = cast(RoutedMoEReference, self.channel_mixer).last_router_aux_loss
+        x = x + self.beta.tanh() * channel_output
+        return x, next_delta_state, next_attention_state, aux_loss
 
 
 @dataclass
@@ -87,6 +92,8 @@ class TepidH1Output:
     attention_states: tuple[AttentionState, ...]
     logits: Tensor | None = None
     loss: Tensor | None = None
+    language_model_loss: Tensor | None = None
+    aux_loss: Tensor | None = None
 
 
 class TepidH1Model(nn.Module):
@@ -118,6 +125,7 @@ class TepidH1Model(nn.Module):
         provided_attention_states = iter(attention_states or ())
         next_delta_states: list[Tensor] = []
         next_attention_states: list[AttentionState] = []
+        aux_losses: list[Tensor] = []
         for layer in self.layers:
             delta_state = (
                 next(provided_delta_states, None)
@@ -129,7 +137,7 @@ class TepidH1Model(nn.Module):
                 if layer.sequence_kind is not SequenceMixer.DELTA
                 else None
             )
-            x, next_delta_state, next_attention_state = layer(
+            x, next_delta_state, next_attention_state, aux_loss = layer(
                 x,
                 delta_state=delta_state,
                 attention_state=attention_state,
@@ -138,10 +146,13 @@ class TepidH1Model(nn.Module):
                 next_delta_states.append(next_delta_state)
             if next_attention_state is not None:
                 next_attention_states.append(next_attention_state)
+            if aux_loss is not None:
+                aux_losses.append(aux_loss)
         return TepidH1Output(
             last_hidden_state=self.final_norm(x),
             delta_states=tuple(next_delta_states),
             attention_states=tuple(next_attention_states),
+            aux_loss=torch.stack(aux_losses).mean() if aux_losses else None,
         )
 
 
@@ -169,10 +180,16 @@ class TepidH1CausalLM(nn.Module):
         )
         output.logits = self.lm_head(output.last_hidden_state)
         if labels is not None:
-            output.loss = _causal_lm_loss(
+            output.language_model_loss = _causal_lm_loss(
                 output.logits,
                 input_ids,
                 labels,
                 self.config.vocab_size,
             )
+            output.loss = output.language_model_loss
+            if output.aux_loss is not None and self.config.moe_router_aux_loss_weight:
+                output.loss = (
+                    output.language_model_loss
+                    + self.config.moe_router_aux_loss_weight * output.aux_loss
+                )
         return output

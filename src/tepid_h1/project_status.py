@@ -87,10 +87,11 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="training_and_evaluation",
-        percent=66,
+        percent=69,
         evidence=(
             "smoke training, checkpoint resume and validation contracts are implemented",
             "retrieval generation/scoring and paired baseline reports are covered",
+            "MoE router load-balancing auxiliary loss is integrated into CausalLM training",
         ),
         gaps=(
             "no decision-grade long-window model quality experiment exists yet",
@@ -99,7 +100,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="backend_performance",
-        percent=46,
+        percent=48,
         evidence=(
             "Delta backend validation compares forward, state and gradients",
             "Delta benchmark matrix reports shape-level throughput and qualification status",
@@ -108,6 +109,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "global sparse attention uses a sparse causal pattern in the reference path",
             "MoE routed experts use grouped selected-expert matmuls instead of "
             "per-expert token dispatch",
+            "MoE router balance is exposed as a differentiable training signal",
         ),
         gaps=(
             "Triton/CUDA/Inductor optimized Delta, NSA and MoE kernels are not complete",

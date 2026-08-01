@@ -51,6 +51,7 @@ class TepidH1Config:
     moe_expert_intermediate_size: int
     moe_shared_intermediate_size: int
     max_position_embeddings: int
+    moe_router_aux_loss_weight: float = 0.01
     rms_norm_eps: float = 1e-6
     dropout: float = 0.0
     tie_word_embeddings: bool = True
@@ -71,6 +72,8 @@ class TepidH1Config:
             errors.append("head_dim must be even for rotary position encoding")
         if not 1 <= self.moe_top_k <= self.moe_num_experts:
             errors.append("moe_top_k must be between 1 and moe_num_experts")
+        if self.moe_router_aux_loss_weight < 0:
+            errors.append("moe_router_aux_loss_weight must be non-negative")
         if self.local_window <= 0:
             errors.append("local_window must be positive")
         if self.max_position_embeddings < self.local_window:

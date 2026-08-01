@@ -57,6 +57,8 @@ class BaselineModelTests(unittest.TestCase):
         self.assertEqual(output.delta_states, ())
         self.assertEqual(len(output.attention_states), config.model.num_layers)
         self.assertTrue(torch.isfinite(output.loss))
+        self.assertIs(output.aux_loss, None)
+        torch.testing.assert_close(output.loss, output.language_model_loss)
         self.assertGreater(metrics.gradient_norm, 0)
 
     def test_baseline_chunked_forward_matches_single_pass(self):

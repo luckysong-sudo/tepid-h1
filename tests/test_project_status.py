@@ -10,7 +10,7 @@ class ProjectStatusTests(unittest.TestCase):
         report = build_project_status_report()
 
         self.assertEqual(report.schema_version, 1)
-        self.assertEqual(report.prototype_overall_percent, 71)
+        self.assertEqual(report.prototype_overall_percent, 72)
         self.assertEqual(report.formal_training_overall_percent, 38)
         for dimension in report.dimensions:
             self.assertGreaterEqual(dimension.percent, 0)

@@ -140,6 +140,47 @@ class ModelTests(unittest.TestCase):
             int(grouped.last_router_stats.expert_counts.sum()),
             oracle_input.shape[0] * oracle_input.shape[1] * config.moe_top_k,
         )
+        self.assertIsNotNone(grouped.last_router_aux_loss)
+        self.assertTrue(torch.isfinite(grouped.last_router_aux_loss))
+
+    def test_causal_lm_adds_moe_auxiliary_loss_when_weighted(self):
+        from dataclasses import replace
+
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+
+        torch.manual_seed(41)
+        config = replace(TepidH1Config.smoke(), moe_router_aux_loss_weight=0.05)
+        model = TepidH1CausalLM(config)
+        input_ids = torch.randint(0, config.vocab_size, (2, 7))
+
+        output = model(input_ids, labels=input_ids)
+
+        self.assertIsNotNone(output.language_model_loss)
+        self.assertIsNotNone(output.aux_loss)
+        self.assertIsNotNone(output.loss)
+        torch.testing.assert_close(
+            output.loss,
+            output.language_model_loss + config.moe_router_aux_loss_weight * output.aux_loss,
+        )
+        self.assertGreater(float(output.aux_loss.detach()), 0)
+
+    def test_zero_moe_auxiliary_weight_preserves_language_model_loss(self):
+        from dataclasses import replace
+
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+
+        torch.manual_seed(43)
+        config = replace(TepidH1Config.smoke(), moe_router_aux_loss_weight=0.0)
+        model = TepidH1CausalLM(config)
+        input_ids = torch.randint(0, config.vocab_size, (1, 7))
+
+        output = model(input_ids, labels=input_ids)
+
+        self.assertIsNotNone(output.language_model_loss)
+        self.assertIsNotNone(output.aux_loss)
+        torch.testing.assert_close(output.loss, output.language_model_loss)
 
     def test_model_chunked_forward_matches_single_pass(self):
         from tepid_h1.config import TepidH1Config

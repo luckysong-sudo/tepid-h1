@@ -65,6 +65,7 @@ class RoutedMoEReference(nn.Module):
             config.moe_shared_intermediate_size,
         )
         self.last_router_stats: MoERouterStats | None = None
+        self.last_router_aux_loss: Tensor | None = None
 
     def forward(self, x: Tensor) -> Tensor:
         original_shape = x.shape
@@ -80,6 +81,7 @@ class RoutedMoEReference(nn.Module):
             expert_counts=counts.detach(),
             router_probabilities=probabilities.detach(),
         )
+        self.last_router_aux_loss = self._router_load_balance_loss(probabilities, indices)
         return (self.shared_expert(flat) + routed).reshape(original_shape)
 
     def _grouped_expert_output(self, flat: Tensor, indices: Tensor, weights: Tensor) -> Tensor:
@@ -94,6 +96,12 @@ class RoutedMoEReference(nn.Module):
         hidden = F.silu(gate) * value
         expert_output = torch.einsum("tki,tkhi->tkh", hidden, selected_down)
         return (expert_output * weights.unsqueeze(-1)).sum(dim=1)
+
+    def _router_load_balance_loss(self, probabilities: Tensor, indices: Tensor) -> Tensor:
+        assignments = F.one_hot(indices, num_classes=self.num_experts).to(probabilities.dtype)
+        assignment_fraction = assignments.mean(dim=(0, 1))
+        probability_fraction = probabilities.mean(dim=0)
+        return self.num_experts * torch.sum(assignment_fraction * probability_fraction)
 
 
 class GatedDeltaMemoryReference(nn.Module):

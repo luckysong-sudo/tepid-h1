@@ -59,6 +59,11 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "global_reference_max_tokens"):
             replace(config, global_reference_max_tokens=0)
 
+    def test_moe_router_aux_loss_weight_is_validated(self) -> None:
+        config = TepidH1Config.smoke()
+        with self.assertRaisesRegex(ValueError, "moe_router_aux_loss_weight"):
+            replace(config, moe_router_aux_loss_weight=-0.01)
+
 
 if __name__ == "__main__":
     unittest.main()
