@@ -10,16 +10,24 @@ import torch
 
 LEGACY_NVIDIA_DRIVER_MAJOR = 450
 SMOKE_ONLY_GPU_MEMORY_MIB = 8192
+SCALE_TRAINING_MEMORY_MIB = 24576
 
 
 @dataclass(frozen=True)
 class LocalGPUPreflightConfig:
     nvidia_smi_path: str | None = None
     minimum_operator_memory_mib: int = SMOKE_ONLY_GPU_MEMORY_MIB
+    minimum_scale_training_memory_mib: int = SCALE_TRAINING_MEMORY_MIB
 
     def __post_init__(self) -> None:
         if self.minimum_operator_memory_mib <= 0:
             raise ValueError("minimum_operator_memory_mib must be positive")
+        if self.minimum_scale_training_memory_mib <= 0:
+            raise ValueError("minimum_scale_training_memory_mib must be positive")
+        if self.minimum_scale_training_memory_mib < self.minimum_operator_memory_mib:
+            raise ValueError(
+                "minimum_scale_training_memory_mib must be >= minimum_operator_memory_mib"
+            )
 
 
 def build_local_gpu_preflight_report(
@@ -33,6 +41,7 @@ def build_local_gpu_preflight_report(
     capacity_warnings = _capacity_warnings(
         hardware_probe,
         minimum_operator_memory_mib=effective_config.minimum_operator_memory_mib,
+        minimum_scale_training_memory_mib=(effective_config.minimum_scale_training_memory_mib),
     )
     readiness = _readiness(blockers, capacity_warnings)
     recommended_actions = _recommended_actions(hardware_probe, torch_probe, blockers)
@@ -190,6 +199,7 @@ def _capacity_warnings(
     hardware_probe: dict[str, Any],
     *,
     minimum_operator_memory_mib: int = SMOKE_ONLY_GPU_MEMORY_MIB,
+    minimum_scale_training_memory_mib: int = SCALE_TRAINING_MEMORY_MIB,
 ) -> list[str]:
     warnings = []
     for gpu in hardware_probe["gpus"]:
@@ -199,6 +209,15 @@ def _capacity_warnings(
                 f"{gpu['name']} reports {memory_total_mib} MiB VRAM below the "
                 f"{minimum_operator_memory_mib} MiB operator threshold; use this device "
                 "for smoke checks only"
+            )
+        if (
+            isinstance(memory_total_mib, int)
+            and minimum_scale_training_memory_mib > minimum_operator_memory_mib
+            and memory_total_mib < minimum_scale_training_memory_mib
+        ):
+            warnings.append(
+                f"{gpu['name']} reports {memory_total_mib} MiB VRAM below the "
+                f"{minimum_scale_training_memory_mib} MiB scale-training threshold"
             )
     return warnings
 

@@ -86,11 +86,14 @@ class CLIParserTests(unittest.TestCase):
                 "C:/Program Files/NVIDIA Corporation/NVSMI/nvidia-smi.exe",
                 "--minimum-operator-memory-mib",
                 "4096",
+                "--minimum-scale-training-memory-mib",
+                "24576",
             ]
         )
         self.assertEqual(args.command, "gpu-preflight")
         self.assertEqual(args.nvidia_smi.name, "nvidia-smi.exe")
         self.assertEqual(args.minimum_operator_memory_mib, 4096)
+        self.assertEqual(args.minimum_scale_training_memory_mib, 24576)
 
     def test_decontaminate_command(self):
         from tepid_h1.cli import build_parser

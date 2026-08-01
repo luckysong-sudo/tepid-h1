@@ -11,7 +11,8 @@ Command:
 ```bash
 tepid-h1 gpu-preflight \
   --nvidia-smi "C:/Program Files/NVIDIA Corporation/NVSMI/nvidia-smi.exe" \
-  --minimum-operator-memory-mib 8192
+  --minimum-operator-memory-mib 8192 \
+  --minimum-scale-training-memory-mib 24576
 ```
 
 Observed host GPU:
@@ -23,8 +24,9 @@ Observed host GPU:
 - Driver status: legacy for modern CUDA-enabled PyTorch builds
 - Memory: `2048 MiB`
 - Operator memory threshold: `8192 MiB`
-- Capacity scope: below operator threshold; smoke checks only until a larger CUDA device
-  is available
+- Scale-training memory threshold: `24576 MiB`
+- Capacity scope: below both operator and scale-training thresholds; smoke checks only
+  until a larger CUDA device is available
 
 Observed Python runtime:
 

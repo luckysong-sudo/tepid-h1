@@ -65,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gpu_preflight.add_argument("--nvidia-smi", type=Path)
     gpu_preflight.add_argument("--minimum-operator-memory-mib", type=int, default=8192)
+    gpu_preflight.add_argument("--minimum-scale-training-memory-mib", type=int, default=24576)
     gpu_preflight.add_argument("--report", type=Path)
     decontamination = subparsers.add_parser(
         "decontaminate",
@@ -328,6 +329,7 @@ def main() -> int:
             LocalGPUPreflightConfig(
                 nvidia_smi_path=str(args.nvidia_smi) if args.nvidia_smi else None,
                 minimum_operator_memory_mib=args.minimum_operator_memory_mib,
+                minimum_scale_training_memory_mib=args.minimum_scale_training_memory_mib,
             )
         )
         _write_payload(gpu_report, args.report)

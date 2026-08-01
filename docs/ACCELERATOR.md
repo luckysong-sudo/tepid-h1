@@ -38,6 +38,7 @@ Local GPU preflight:
 tepid-h1 gpu-preflight \
   --nvidia-smi "C:/Program Files/NVIDIA Corporation/NVSMI/nvidia-smi.exe" \
   --minimum-operator-memory-mib 8192 \
+  --minimum-scale-training-memory-mib 24576 \
   --report artifacts/local-gpu-preflight.json
 ```
 
@@ -48,9 +49,10 @@ active project environment reports `torch 2.13.0+cpu`, no CUDA runtime and
 cannot yet execute Tepid-H1 CUDA paths from this virtual environment.
 The preflight marks the 388-series driver as legacy for modern CUDA-enabled PyTorch
 builds and recommends driver alignment before CUDA wheel installation.
-It also compares GPU memory against the configurable operator-memory threshold. The
-current MX150 reports 2048 MiB against an 8192 MiB threshold, so this host should not be
-used as 350M training or production-kernel performance evidence.
+It also compares GPU memory against configurable operator and scale-training thresholds.
+The current MX150 reports 2048 MiB against the 8192 MiB operator threshold and 24576 MiB
+scale-training threshold, so this host should not be used as 350M training or
+production-kernel performance evidence.
 The current evidence snapshot is recorded in `docs/LOCAL_GPU_EVIDENCE.md`.
 
 CUDA timing synchronizes the device immediately before and after every measured training
