@@ -117,43 +117,7 @@ class InferenceEngine:
         # Reset caches for each generation call
         self.reset()
 
-        gen_config = config or GenerateConfig()
-        kwargs_config = GenerateConfig(**kwargs)
-
-        def _override(base, override, field):
-            """Use override value only if it differs from the field's default."""
-            override_default = GenerateConfig.__dataclass_fields__[field].default
-            if override == override_default and base != override_default:
-                return base
-            return override
-
-        effective_config = GenerateConfig(
-            max_new_tokens=_override(
-                gen_config.max_new_tokens, kwargs_config.max_new_tokens, "max_new_tokens"
-            ),
-            temperature=_override(gen_config.temperature, kwargs_config.temperature, "temperature"),
-            top_k=_override(gen_config.top_k, kwargs_config.top_k, "top_k"),
-            top_p=_override(gen_config.top_p, kwargs_config.top_p, "top_p"),
-            repetition_penalty=_override(
-                gen_config.repetition_penalty,
-                kwargs_config.repetition_penalty,
-                "repetition_penalty",
-            ),
-            pad_token_id=_override(
-                gen_config.pad_token_id, kwargs_config.pad_token_id, "pad_token_id"
-            ),
-            eos_token_id=_override(
-                gen_config.eos_token_id, kwargs_config.eos_token_id, "eos_token_id"
-            ),
-            num_return_sequences=_override(
-                gen_config.num_return_sequences,
-                kwargs_config.num_return_sequences,
-                "num_return_sequences",
-            ),
-            do_sample=_override(gen_config.do_sample, kwargs_config.do_sample, "do_sample"),
-            device=_override(gen_config.device, kwargs_config.device, "device"),
-            dtype=_override(gen_config.dtype, kwargs_config.dtype, "dtype"),
-        )
+        effective_config = _merge_generation_config(config, kwargs)
 
         _validate_generation_token_ids(effective_config, self._config.vocab_size)
         device, dtype = _resolve_generation_execution(effective_config)
@@ -316,6 +280,24 @@ class InferenceEngine:
         probs = torch.softmax(logits, dim=-1)
         next_token = torch.multinomial(probs, num_samples=1)
         return next_token
+
+
+def _merge_generation_config(
+    config: GenerateConfig | None,
+    overrides: dict[str, Any],
+) -> GenerateConfig:
+    base = config or GenerateConfig()
+    if not overrides:
+        return base
+
+    fields = GenerateConfig.__dataclass_fields__
+    unknown = sorted(set(overrides).difference(fields))
+    if unknown:
+        raise TypeError("unknown generation config fields: " + ", ".join(unknown))
+
+    payload = {field: getattr(base, field) for field in fields}
+    payload.update(overrides)
+    return GenerateConfig(**payload)
 
 
 def _apply_repetition_penalty(

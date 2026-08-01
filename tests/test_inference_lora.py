@@ -447,6 +447,52 @@ class TestInferenceEngine:
         assert generated.shape[0] == 2
         assert metadata["num_return_sequences"] == 2
 
+    def test_generate_kwargs_can_override_config_back_to_defaults(self):
+        class FixedLogitModel:
+            config = TepidH1Config.smoke()
+
+            def eval(self):
+                return self
+
+            def to(self, *, device, dtype):
+                self.device = device
+                self.dtype = dtype
+                return self
+
+            def __call__(self, input_ids, delta_states=None, attention_states=None):
+                logits = torch.zeros(input_ids.shape[0], input_ids.shape[1], 8)
+                logits[..., 3] = 1.0
+                return SimpleNamespace(
+                    logits=logits,
+                    delta_states=None,
+                    attention_states=None,
+                )
+
+        engine = InferenceEngine(FixedLogitModel(), use_kv_cache=False)
+
+        _, metadata = engine.generate(
+            torch.tensor([[1, 2]]),
+            config=GenerateConfig(
+                max_new_tokens=3,
+                do_sample=False,
+                top_k=4,
+                top_p=0.5,
+            ),
+            max_new_tokens=1,
+            do_sample=True,
+            top_k=0,
+            top_p=1.0,
+        )
+
+        assert metadata["max_new_tokens"] == 1
+        assert metadata["do_sample"] is True
+        assert metadata["top_k"] == 0
+        assert metadata["top_p"] == 1.0
+
+    def test_generate_rejects_unknown_kwargs(self, engine):
+        with pytest.raises(TypeError, match="unknown generation config fields"):
+            engine.generate(torch.tensor([[1, 2]]), unknown_control=1)
+
 
 class TestLoRA:
     def test_lora_config_validation(self):
