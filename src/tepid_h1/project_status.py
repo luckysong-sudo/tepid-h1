@@ -61,12 +61,14 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="reference_architecture",
-        percent=76,
+        percent=78,
         evidence=(
             "macro-block config, Delta, GQA, MoE and matched baseline are implemented",
             "streaming/chunking state contracts have unit coverage",
             "global sparse attention now uses deterministic local-window plus "
             "global-anchor sparsity",
+            "model recurrent state inputs fail closed when Delta or attention state "
+            "counts do not match the layer plan",
         ),
         gaps=(
             "reference sparse attention is not yet a production fused kernel",
@@ -87,11 +89,12 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="training_and_evaluation",
-        percent=69,
+        percent=70,
         evidence=(
             "smoke training, checkpoint resume and validation contracts are implemented",
             "retrieval generation/scoring and paired baseline reports are covered",
             "MoE router load-balancing auxiliary loss is integrated into CausalLM training",
+            "streaming train/eval calls reject incomplete recurrent state tuples",
         ),
         gaps=(
             "no decision-grade long-window model quality experiment exists yet",

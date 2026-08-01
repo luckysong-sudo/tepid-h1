@@ -205,6 +205,30 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(len(second.delta_states), 5)
         self.assertEqual(len(second.attention_states), 3)
 
+    def test_model_rejects_missing_or_extra_recurrent_states(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+
+        torch.manual_seed(47)
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config).eval()
+        input_ids = torch.randint(0, config.vocab_size, (1, 7))
+
+        with torch.no_grad():
+            output = model(input_ids)
+
+        with self.assertRaisesRegex(ValueError, "delta_states"):
+            model(input_ids[:, :2], delta_states=output.delta_states[:-1])
+        with self.assertRaisesRegex(ValueError, "delta_states"):
+            model(input_ids[:, :2], delta_states=output.delta_states + output.delta_states[:1])
+        with self.assertRaisesRegex(ValueError, "attention_states"):
+            model(input_ids[:, :2], attention_states=output.attention_states[:-1])
+        with self.assertRaisesRegex(ValueError, "attention_states"):
+            model(
+                input_ids[:, :2],
+                attention_states=output.attention_states + output.attention_states[:1],
+            )
+
     def test_model_multiple_chunks_match_after_local_cache_trim(self):
         from tepid_h1.config import TepidH1Config
         from tepid_h1.modeling import TepidH1CausalLM

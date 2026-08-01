@@ -120,6 +120,7 @@ class TepidH1Model(nn.Module):
     ) -> TepidH1Output:
         if input_ids.ndim != 2:
             raise ValueError("input_ids must have shape [batch, sequence]")
+        self._validate_state_counts(delta_states, attention_states)
         x = self.token_embeddings(input_ids)
         provided_delta_states = iter(delta_states or ())
         provided_attention_states = iter(attention_states or ())
@@ -154,6 +155,26 @@ class TepidH1Model(nn.Module):
             attention_states=tuple(next_attention_states),
             aux_loss=torch.stack(aux_losses).mean() if aux_losses else None,
         )
+
+    def _validate_state_counts(
+        self,
+        delta_states: tuple[Tensor, ...] | None,
+        attention_states: tuple[AttentionState, ...] | None,
+    ) -> None:
+        expected_delta_states = sum(
+            1 for layer in self.layers if layer.sequence_kind is SequenceMixer.DELTA
+        )
+        expected_attention_states = len(self.layers) - expected_delta_states
+        if delta_states is not None and len(delta_states) != expected_delta_states:
+            raise ValueError(
+                "delta_states must contain one state per Delta layer: "
+                f"expected {expected_delta_states}, got {len(delta_states)}"
+            )
+        if attention_states is not None and len(attention_states) != expected_attention_states:
+            raise ValueError(
+                "attention_states must contain one state per attention layer: "
+                f"expected {expected_attention_states}, got {len(attention_states)}"
+            )
 
 
 class TepidH1CausalLM(nn.Module):
