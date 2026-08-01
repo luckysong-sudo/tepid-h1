@@ -139,6 +139,18 @@ class TestInferenceEngine:
         with pytest.raises(ValueError, match="CPU generation"):
             GenerateConfig(device="cpu", dtype="float16")
 
+    def test_generate_config_rejects_invalid_control_types(self):
+        with pytest.raises(TypeError, match="top_k"):
+            GenerateConfig(top_k=1.5)
+        with pytest.raises(TypeError, match="top_k"):
+            GenerateConfig(top_k=True)
+        with pytest.raises(TypeError, match="num_return_sequences"):
+            GenerateConfig(num_return_sequences=1.0)
+        with pytest.raises(TypeError, match="num_return_sequences"):
+            GenerateConfig(num_return_sequences=False)
+        with pytest.raises(TypeError, match="do_sample"):
+            GenerateConfig(do_sample=1)
+
     def test_cuda_generation_requires_available_runtime(self):
         if torch.cuda.is_available():
             pytest.skip("CUDA runtime is available on this host")

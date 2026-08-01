@@ -45,12 +45,20 @@ class GenerateConfig:
             raise ValueError("temperature must be positive")
         if not 0.0 <= self.top_p <= 1.0:
             raise ValueError("top_p must be in [0, 1]")
+        if not isinstance(self.top_k, int) or isinstance(self.top_k, bool):
+            raise TypeError("top_k must be an integer")
         if self.top_k < 0:
             raise ValueError("top_k must be non-negative")
         if not 1.0 <= self.repetition_penalty <= 2.0:
             raise ValueError("repetition_penalty must be in [1.0, 2.0]")
+        if not isinstance(self.num_return_sequences, int) or isinstance(
+            self.num_return_sequences, bool
+        ):
+            raise TypeError("num_return_sequences must be an integer")
         if self.num_return_sequences <= 0:
             raise ValueError("num_return_sequences must be positive")
+        if not isinstance(self.do_sample, bool):
+            raise TypeError("do_sample must be a boolean")
         if self.device not in {"cpu", "cuda"}:
             raise ValueError("device must be 'cpu' or 'cuda'")
         if self.dtype not in _DTYPES:
