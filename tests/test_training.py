@@ -180,10 +180,10 @@ class TrainingTests(unittest.TestCase):
             torch.testing.assert_close(actual, expected)
         self.assertTrue(restored_optimizer.state_dict()["state"])
 
-    def test_non_finite_loss_blocks_optimizer_step(self):
+    def test_train_step_rejects_batches_without_target_tokens(self):
         from tepid_h1.config import TepidH1Config
         from tepid_h1.modeling import TepidH1CausalLM
-        from tepid_h1.training import NonFiniteTrainingError, causal_lm_train_step
+        from tepid_h1.training import causal_lm_train_step
 
         config = TepidH1Config.smoke()
         model = TepidH1CausalLM(config)
@@ -192,10 +192,37 @@ class TrainingTests(unittest.TestCase):
         ignored_labels = torch.full_like(input_ids, -100)
         before = model.model.token_embeddings.weight.detach().clone()
 
-        with self.assertRaisesRegex(NonFiniteTrainingError, "loss"):
+        with self.assertRaisesRegex(ValueError, "target token"):
             causal_lm_train_step(model, input_ids, optimizer, labels=ignored_labels)
 
         self.assertTrue(torch.equal(before, model.model.token_embeddings.weight))
+        self.assertFalse(optimizer.state_dict()["state"])
+
+    def test_train_step_rejects_empty_targets_before_model_forward(self):
+        from tepid_h1.training import causal_lm_train_step
+
+        class FakeModel(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.weight = torch.nn.Parameter(torch.tensor(1.0))
+                self.called = False
+
+            def forward(self, input_ids, labels=None):
+                self.called = True
+                return SimpleNamespace(loss=self.weight * 0.0)
+
+        model = FakeModel()
+        optimizer = torch.optim.AdamW(model.parameters())
+
+        with self.assertRaisesRegex(ValueError, "target token"):
+            causal_lm_train_step(
+                model,
+                torch.tensor([[1, 2, 3]]),
+                optimizer,
+                labels=torch.full((1, 3), -100),
+            )
+
+        self.assertFalse(model.called)
         self.assertFalse(optimizer.state_dict()["state"])
 
     def test_checkpoint_rejects_different_config(self):

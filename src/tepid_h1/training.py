@@ -146,6 +146,9 @@ def causal_lm_train_step(
     model.train()
     optimizer.zero_grad(set_to_none=True)
     targets = input_ids if labels is None else labels
+    trained_tokens = int((targets[:, 1:] != -100).sum().item())
+    if trained_tokens <= 0:
+        raise ValueError("training labels must include at least one target token")
     output = model(input_ids, labels=targets)
     if output.loss is None:
         raise AssertionError("model did not return a training loss")
@@ -158,7 +161,6 @@ def causal_lm_train_step(
         optimizer.zero_grad(set_to_none=True)
         raise NonFiniteTrainingError("gradient norm is NaN or Inf")
     optimizer.step()
-    trained_tokens = int((targets[:, 1:] != -100).sum().item())
     return TrainStepMetrics(
         loss=float(output.loss.detach()),
         gradient_norm=float(gradient_norm.detach()),
