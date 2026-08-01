@@ -233,6 +233,11 @@ class InferenceEngine:
             "num_return_sequences": effective_config.num_return_sequences,
             "max_new_tokens": effective_config.max_new_tokens,
             "temperature": effective_config.temperature,
+            "top_k": effective_config.top_k,
+            "top_p": effective_config.top_p,
+            "repetition_penalty": effective_config.repetition_penalty,
+            "pad_token_id": effective_config.pad_token_id,
+            "eos_token_id": effective_config.eos_token_id,
             "do_sample": effective_config.do_sample,
             "use_kv_cache": self._use_kv_cache,
         }
@@ -254,6 +259,8 @@ class InferenceEngine:
         """Select the next token from logits."""
         if repetition_penalty > 1.0 and token_history is not None:
             logits = _apply_repetition_penalty(logits, token_history, repetition_penalty)
+
+        logits = _suppress_pad_token(logits, pad_token_id, eos_token_id)
 
         if top_k > 0:
             logits = _top_k_filter(logits, top_k)
@@ -297,6 +304,23 @@ def _apply_repetition_penalty(
             values * repetition_penalty,
         )
     return penalized
+
+
+def _suppress_pad_token(
+    logits: Tensor,
+    pad_token_id: int | None,
+    eos_token_id: int | None,
+) -> Tensor:
+    """Prevent padding from being generated as content."""
+    if logits.ndim != 2 or pad_token_id is None or pad_token_id == eos_token_id:
+        return logits
+    vocab_size = logits.shape[-1]
+    if not 0 <= pad_token_id < vocab_size or vocab_size <= 1:
+        return logits
+
+    filtered = logits.clone()
+    filtered[:, pad_token_id] = float("-inf")
+    return filtered
 
 
 def _top_k_filter(logits: Tensor, top_k: int) -> Tensor:

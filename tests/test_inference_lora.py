@@ -9,6 +9,7 @@ from tepid_h1.inference import (
     GenerateConfig,
     InferenceEngine,
     _apply_repetition_penalty,
+    _suppress_pad_token,
     _top_k_filter,
     _top_p_filter,
     decode_text,
@@ -96,6 +97,28 @@ class TestInferenceEngine:
 
         assert metadata["do_sample"] is False
 
+    def test_generate_metadata_includes_sampling_controls(self, engine):
+        input_ids = torch.tensor([[1, 2, 3]])
+
+        _, metadata = engine.generate(
+            input_ids,
+            config=GenerateConfig(
+                max_new_tokens=1,
+                do_sample=False,
+                top_k=5,
+                top_p=0.8,
+                repetition_penalty=1.2,
+                pad_token_id=0,
+                eos_token_id=9,
+            ),
+        )
+
+        assert metadata["top_k"] == 5
+        assert metadata["top_p"] == 0.8
+        assert metadata["repetition_penalty"] == 1.2
+        assert metadata["pad_token_id"] == 0
+        assert metadata["eos_token_id"] == 9
+
     def test_generate_config_allows_top_k_larger_than_generation_length(self):
         config = GenerateConfig(max_new_tokens=2, top_k=50)
 
@@ -131,6 +154,30 @@ class TestInferenceEngine:
 
         assert torch.equal(first, torch.tensor([[1]]))
         assert torch.equal(first, second)
+
+    def test_sample_suppresses_pad_token_for_greedy_decoding(self, engine):
+        logits = torch.tensor([[5.0, 4.0]])
+
+        next_token = engine._sample(
+            logits,
+            token_history=None,
+            temperature=1.0,
+            top_k=0,
+            top_p=1.0,
+            repetition_penalty=1.0,
+            pad_token_id=0,
+            eos_token_id=None,
+            do_sample=False,
+        )
+
+        assert torch.equal(next_token, torch.tensor([[1]]))
+
+    def test_pad_token_remains_available_when_it_is_eos(self):
+        logits = torch.tensor([[5.0, 4.0]])
+
+        filtered = _suppress_pad_token(logits, pad_token_id=0, eos_token_id=0)
+
+        assert torch.equal(filtered, logits)
 
     def test_top_k_filter_clamps_to_vocab_size(self):
         logits = torch.tensor([[1.0, 2.0, 3.0]])

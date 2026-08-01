@@ -90,7 +90,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="training_and_evaluation",
-        percent=75,
+        percent=76,
         evidence=(
             "smoke training, checkpoint resume and validation contracts are implemented",
             "retrieval generation/scoring and paired baseline reports are covered",
@@ -100,6 +100,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "autoregressive inference respects explicit greedy versus sampling mode",
             "repetition penalty uses generated-token history during autoregressive decoding",
             "top-k and nucleus sampling filters handle vocabulary-index boundaries correctly",
+            "autoregressive sampling suppresses pad tokens while preserving eos stop tokens",
         ),
         gaps=(
             "no decision-grade long-window model quality experiment exists yet",
