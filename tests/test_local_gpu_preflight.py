@@ -42,6 +42,7 @@ class LocalGPUPreflightTests(unittest.TestCase):
         self.assertIn("cuda_available", report["torch"])
         self.assertTrue(report["recommended_actions"])
         self.assertEqual(report["capacity_warnings"], [])
+        self.assertEqual(report["readiness"]["cuda_runtime"]["status"], "blocked")
         self.assertEqual(report["validation_plan"][1]["status"], "blocked")
 
     def test_blockers_include_cuda_torch_action(self):
@@ -90,6 +91,22 @@ class LocalGPUPreflightTests(unittest.TestCase):
 
         self.assertEqual(len(warnings), 1)
         self.assertIn("smoke and operator-level", warnings[0])
+
+    def test_readiness_distinguishes_smoke_and_scale_training(self):
+        from tepid_h1.integrations.local_gpu import _readiness
+
+        blocked = _readiness(
+            ["installed PyTorch build does not include CUDA"],
+            ["GeForce MX150 reports 2048 MiB VRAM"],
+        )
+        ready_smoke = _readiness([], ["GeForce MX150 reports 2048 MiB VRAM"])
+        not_assessed_scale = _readiness([], [])
+
+        self.assertEqual(blocked["cuda_runtime"]["status"], "blocked")
+        self.assertEqual(blocked["operator_smoke"]["status"], "blocked")
+        self.assertEqual(ready_smoke["operator_smoke"]["status"], "ready")
+        self.assertEqual(ready_smoke["scale_training"]["status"], "blocked")
+        self.assertEqual(not_assessed_scale["scale_training"]["status"], "not_assessed")
 
 
 if __name__ == "__main__":

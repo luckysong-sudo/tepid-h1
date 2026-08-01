@@ -34,6 +34,11 @@ Current blocker:
 
 - The active virtual environment uses a CPU-only PyTorch build, so Tepid-H1 CUDA paths
   cannot execute on the local GPU yet.
+- Readiness summary:
+  - CUDA runtime: blocked
+  - Operator smoke: blocked until CUDA runtime is enabled
+  - Training smoke: blocked until CUDA runtime is enabled
+  - Scale training: blocked by both CUDA runtime and MX150 2048 MiB capacity
 
 Required next actions:
 

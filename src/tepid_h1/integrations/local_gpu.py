@@ -26,6 +26,7 @@ def build_local_gpu_preflight_report(
     torch_probe = _torch_probe()
     blockers = _blockers(hardware_probe, torch_probe)
     capacity_warnings = _capacity_warnings(hardware_probe)
+    readiness = _readiness(blockers, capacity_warnings)
     recommended_actions = _recommended_actions(hardware_probe, torch_probe, blockers)
     validation_plan = _validation_plan(ready_for_cuda=not blockers)
     return {
@@ -37,6 +38,7 @@ def build_local_gpu_preflight_report(
         "ready_for_cuda": not blockers,
         "blockers": blockers,
         "capacity_warnings": capacity_warnings,
+        "readiness": readiness,
         "recommended_actions": recommended_actions,
         "validation_plan": validation_plan,
         "interpretation": (
@@ -186,6 +188,35 @@ def _capacity_warnings(hardware_probe: dict[str, Any]) -> list[str]:
                 "for smoke and operator-level checks only"
             )
     return warnings
+
+
+def _readiness(
+    blockers: list[str],
+    capacity_warnings: list[str],
+) -> dict[str, dict[str, Any]]:
+    cuda_ready = not blockers
+    smoke_status = "ready" if cuda_ready else "blocked"
+    smoke_reasons = [] if cuda_ready else blockers
+    scale_reasons = [*blockers, *capacity_warnings]
+    return {
+        "cuda_runtime": {
+            "status": "ready" if cuda_ready else "blocked",
+            "reasons": [] if cuda_ready else blockers,
+        },
+        "operator_smoke": {
+            "status": smoke_status,
+            "reasons": smoke_reasons,
+        },
+        "training_smoke": {
+            "status": smoke_status,
+            "reasons": smoke_reasons,
+        },
+        "scale_training": {
+            "status": "blocked" if scale_reasons else "not_assessed",
+            "reasons": scale_reasons
+            or ["scale training requires a separate target-hardware experiment plan"],
+        },
+    }
 
 
 def _recommended_actions(

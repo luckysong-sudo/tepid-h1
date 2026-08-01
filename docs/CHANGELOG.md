@@ -31,6 +31,7 @@ All notable changes to the Tepid-H1 project will be documented in this file.
 - Added GPU preflight CLI readiness contract coverage.
 - Added local GPU post-enablement validation plan reporting.
 - Added local GPU capacity warnings for smoke/operator-only devices.
+- Added local GPU readiness tier reporting.
 - Removed accidental local installer/null artifacts from the tracked tree.
 - Type annotation for `attn_bias` parameter in `model.py`
 - Removed redundant `num_kv_heads` parameter from `TepidH1CausalLM`

@@ -118,6 +118,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "local GPU preflight reports host GPU, PyTorch CUDA readiness and next actions",
             "local GPU validation plan enumerates CUDA benchmark commands after enablement",
             "local GPU preflight warns when VRAM only supports smoke/operator checks",
+            "local GPU readiness separates CUDA runtime, smoke checks and scale training",
         ),
         gaps=(
             "operations remain tied to Space quota and external Hugging Face state",
