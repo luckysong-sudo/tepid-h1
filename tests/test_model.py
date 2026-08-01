@@ -229,6 +229,42 @@ class ModelTests(unittest.TestCase):
                 attention_states=output.attention_states + output.attention_states[:1],
             )
 
+    def test_model_rejects_invalid_input_token_ids(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+
+        with self.assertRaisesRegex(TypeError, "torch.long"):
+            model(torch.ones(1, 3, dtype=torch.float32))
+        with self.assertRaisesRegex(ValueError, r"\[0, 128\)"):
+            model(torch.tensor([[0, config.vocab_size]], dtype=torch.long))
+        with self.assertRaisesRegex(ValueError, r"\[0, 128\)"):
+            model(torch.tensor([[-1, 0]], dtype=torch.long))
+        with self.assertRaisesRegex(ValueError, "sequence length"):
+            model(torch.empty(1, 0, dtype=torch.long))
+
+    def test_causal_lm_rejects_invalid_labels_and_logits(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.model import _causal_lm_loss
+
+        config = TepidH1Config.smoke()
+        input_ids = torch.randint(0, config.vocab_size, (2, 4), dtype=torch.long)
+        logits = torch.randn(2, 4, config.vocab_size)
+
+        with self.assertRaisesRegex(TypeError, "torch.long"):
+            _causal_lm_loss(logits, input_ids, input_ids.float(), config.vocab_size)
+        with self.assertRaisesRegex(ValueError, "-100"):
+            _causal_lm_loss(
+                logits,
+                input_ids,
+                torch.full_like(input_ids, config.vocab_size),
+                config.vocab_size,
+            )
+        with self.assertRaisesRegex(ValueError, "logits"):
+            _causal_lm_loss(logits[:, :-1], input_ids, input_ids, config.vocab_size)
+
     def test_model_multiple_chunks_match_after_local_cache_trim(self):
         from tepid_h1.config import TepidH1Config
         from tepid_h1.modeling import TepidH1CausalLM

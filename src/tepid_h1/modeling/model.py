@@ -20,8 +20,9 @@ from .layers import (
 
 
 def _causal_lm_loss(logits: Tensor, input_ids: Tensor, labels: Tensor, vocab_size: int) -> Tensor:
-    if labels.shape != input_ids.shape:
-        raise ValueError("labels must have the same shape as input_ids")
+    if logits.ndim != 3 or logits.shape[:2] != input_ids.shape or logits.shape[-1] != vocab_size:
+        raise ValueError("logits must have shape [batch, sequence, vocab_size] matching input_ids")
+    _validate_labels(input_ids, labels, vocab_size)
     if labels.shape[1] < 2:
         raise ValueError("causal language-model loss requires at least two tokens")
     return F.cross_entropy(
@@ -29,6 +30,29 @@ def _causal_lm_loss(logits: Tensor, input_ids: Tensor, labels: Tensor, vocab_siz
         labels[:, 1:].contiguous().view(-1),
         ignore_index=-100,
     )
+
+
+def _validate_input_ids(input_ids: Tensor, vocab_size: int) -> None:
+    if input_ids.ndim != 2:
+        raise ValueError("input_ids must have shape [batch, sequence]")
+    if input_ids.shape[1] <= 0:
+        raise ValueError("input_ids sequence length must be positive")
+    if input_ids.dtype != torch.long:
+        raise TypeError("input_ids must use torch.long dtype")
+    if input_ids.numel() and (
+        int(input_ids.min().item()) < 0 or int(input_ids.max().item()) >= vocab_size
+    ):
+        raise ValueError(f"input_ids must contain token ids in [0, {vocab_size})")
+
+
+def _validate_labels(input_ids: Tensor, labels: Tensor, vocab_size: int) -> None:
+    if labels.shape != input_ids.shape:
+        raise ValueError("labels must have the same shape as input_ids")
+    if labels.dtype != torch.long:
+        raise TypeError("labels must use torch.long dtype")
+    valid_labels = (labels == -100) | ((labels >= 0) & (labels < vocab_size))
+    if not bool(valid_labels.all().item()):
+        raise ValueError(f"labels must contain -100 or token ids in [0, {vocab_size})")
 
 
 class TepidH1Block(nn.Module):
@@ -118,8 +142,7 @@ class TepidH1Model(nn.Module):
         delta_states: tuple[Tensor, ...] | None = None,
         attention_states: tuple[AttentionState, ...] | None = None,
     ) -> TepidH1Output:
-        if input_ids.ndim != 2:
-            raise ValueError("input_ids must have shape [batch, sequence]")
+        _validate_input_ids(input_ids, self.config.vocab_size)
         self._validate_state_counts(delta_states, attention_states)
         x = self.token_embeddings(input_ids)
         provided_delta_states = iter(delta_states or ())
