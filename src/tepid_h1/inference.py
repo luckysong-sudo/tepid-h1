@@ -13,6 +13,13 @@ from .modeling import AttentionState, TepidH1CausalLM
 from .modeling.cache import AttentionCache
 
 
+_DTYPES: dict[str, torch.dtype] = {
+    "float32": torch.float32,
+    "bfloat16": torch.bfloat16,
+    "float16": torch.float16,
+}
+
+
 @dataclass(frozen=True)
 class GenerateConfig:
     """Configuration for autoregressive generation."""
@@ -44,6 +51,12 @@ class GenerateConfig:
             raise ValueError("repetition_penalty must be in [1.0, 2.0]")
         if self.num_return_sequences <= 0:
             raise ValueError("num_return_sequences must be positive")
+        if self.device not in {"cpu", "cuda"}:
+            raise ValueError("device must be 'cpu' or 'cuda'")
+        if self.dtype not in _DTYPES:
+            raise ValueError("dtype must be float32, bfloat16 or float16")
+        if self.device == "cpu" and self.dtype != "float32":
+            raise ValueError("CPU generation only supports float32 dtype")
 
 
 class InferenceEngine:
@@ -134,7 +147,8 @@ class InferenceEngine:
             dtype=_override(gen_config.dtype, kwargs_config.dtype, "dtype"),
         )
 
-        device = torch.device(effective_config.device)
+        device, dtype = _resolve_generation_execution(effective_config)
+        self.model = self.model.to(device=device, dtype=dtype)
         input_ids = input_ids.to(device=device)
         if input_ids.ndim == 1:
             input_ids = input_ids.unsqueeze(0)
@@ -249,6 +263,8 @@ class InferenceEngine:
             "repetition_penalty": effective_config.repetition_penalty,
             "pad_token_id": effective_config.pad_token_id,
             "eos_token_id": effective_config.eos_token_id,
+            "device": device.type,
+            "dtype": str(dtype).removeprefix("torch."),
             "do_sample": effective_config.do_sample,
             "use_kv_cache": self._use_kv_cache,
         }
@@ -350,6 +366,19 @@ def _apply_finished_sequence_mask(
     fill_token_id = eos_token_id if pad_token_id is None else pad_token_id
     fill_tokens = torch.full_like(next_token_ids, fill_token_id)
     return torch.where(finished_sequences, fill_tokens, next_token_ids)
+
+
+def _resolve_generation_execution(config: GenerateConfig) -> tuple[torch.device, torch.dtype]:
+    """Resolve and validate the execution backend for generation."""
+    if config.device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is not available")
+    if (
+        config.device == "cuda"
+        and config.dtype == "bfloat16"
+        and not torch.cuda.is_bf16_supported()
+    ):
+        raise RuntimeError("bfloat16 was requested but the CUDA device does not support it")
+    return torch.device(config.device), _DTYPES[config.dtype]
 
 
 def _top_k_filter(logits: Tensor, top_k: int) -> Tensor:

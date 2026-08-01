@@ -12,6 +12,7 @@ from tepid_h1.inference import (
     InferenceEngine,
     _apply_finished_sequence_mask,
     _apply_repetition_penalty,
+    _resolve_generation_execution,
     _suppress_pad_token,
     _top_k_filter,
     _top_p_filter,
@@ -121,11 +122,28 @@ class TestInferenceEngine:
         assert metadata["repetition_penalty"] == 1.2
         assert metadata["pad_token_id"] == 0
         assert metadata["eos_token_id"] == 9
+        assert metadata["device"] == "cpu"
+        assert metadata["dtype"] == "float32"
 
     def test_generate_config_allows_top_k_larger_than_generation_length(self):
         config = GenerateConfig(max_new_tokens=2, top_k=50)
 
         assert config.top_k == 50
+
+    def test_generate_config_rejects_invalid_execution_backend(self):
+        with pytest.raises(ValueError, match="device"):
+            GenerateConfig(device="metal")
+        with pytest.raises(ValueError, match="dtype"):
+            GenerateConfig(dtype="float64")
+        with pytest.raises(ValueError, match="CPU generation"):
+            GenerateConfig(device="cpu", dtype="float16")
+
+    def test_cuda_generation_requires_available_runtime(self):
+        if torch.cuda.is_available():
+            pytest.skip("CUDA runtime is available on this host")
+
+        with pytest.raises(RuntimeError, match="CUDA was requested"):
+            _resolve_generation_execution(GenerateConfig(device="cuda", dtype="float32"))
 
     def test_greedy_sample_uses_argmax_without_rng(self, engine):
         logits = torch.tensor([[0.0, 10.0, 9.0]])
@@ -269,6 +287,11 @@ class TestInferenceEngine:
             def eval(self):
                 return self
 
+            def to(self, *, device, dtype):
+                self.device = device
+                self.dtype = dtype
+                return self
+
             def __call__(self, input_ids, delta_states=None, attention_states=None):
                 self.calls += 1
                 logits = torch.full((input_ids.shape[0], input_ids.shape[1], 8), -100.0)
@@ -299,6 +322,8 @@ class TestInferenceEngine:
         assert torch.equal(generated[0], torch.tensor([1, 4, 0, 0]))
         assert torch.equal(generated[1], torch.tensor([2, 5, 7, 7]))
         assert metadata["new_tokens"] == 3
+        assert engine.model.device == torch.device("cpu")
+        assert engine.model.dtype == torch.float32
 
     def test_finished_sequence_mask_requires_matching_shape(self):
         with pytest.raises(ValueError, match="finished_sequences"):
