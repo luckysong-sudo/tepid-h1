@@ -9,6 +9,7 @@ from typing import Any
 
 import torch
 import torch.nn as nn
+from safetensors.torch import save_model
 
 
 _SUPPORTED_EXPORT_FORMATS = frozenset({"torchscript", "onnx", "safetensors"})
@@ -100,11 +101,7 @@ class ModelExporter:
         """
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        state_dict = self.model.state_dict()
-
-        # Export using torch's built-in save for now
-        # In production, use safetensors library
-        torch.save(state_dict, str(output_path))
+        save_model(self.model, str(output_path), metadata=_safetensors_metadata(metadata))
 
         # Save config separately
         config_path = output_path.parent / "config.json"
@@ -185,3 +182,10 @@ def _export_config_payload(config: Any) -> dict[str, Any]:
     if isinstance(config, dict):
         return dict(config)
     raise ValueError("export config must be a dataclass or dictionary")
+
+
+def _safetensors_metadata(metadata: dict[str, Any] | None) -> dict[str, str]:
+    payload = {"format": "safetensors"}
+    if metadata:
+        payload.update({str(key): str(value) for key, value in metadata.items()})
+    return payload

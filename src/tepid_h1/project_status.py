@@ -176,7 +176,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="documentation_and_release_readiness",
-        percent=75,
+        percent=76,
         evidence=(
             "architecture, training, governance, retrieval and roadmap docs exist",
             "stage-gate and project-hygiene checks are now machine-readable",
@@ -184,6 +184,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "public API reference documents the stable top-level and subpackage exports",
             "inference export rejects unsupported formats instead of silently skipping them",
             "export metadata cannot override model configuration keys",
+            "SafeTensors export writes a real safetensors file instead of a torch pickle",
         ),
         gaps=("release packaging and user-facing examples need hardening",),
     ),

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from safetensors.torch import load_file
 
 from tepid_h1.config import TepidH1Config
 from tepid_h1.export import ModelExporter
@@ -52,6 +53,8 @@ class TestModelExporter:
         output_path = tmp_path / "model.safetensors"
         result = exporter.export_safe_tensor(output_path)
         assert result.exists()
+        tensors = load_file(result)
+        assert "lm_head.weight" in tensors
         config_path = result.parent / "config.json"
         assert config_path.exists()
         with config_path.open() as f:
@@ -62,13 +65,16 @@ class TestModelExporter:
         self, exporter: ModelExporter, tmp_path: Path
     ) -> None:
         output_path = tmp_path / "model_with_meta.safetensors"
-        metadata = {"author": "test", "version": "1.0"}
+        metadata = {"author": "test", "version": "1.0", "step": 3}
         result = exporter.export_safe_tensor(output_path, metadata=metadata)
+        tensors = load_file(result)
+        assert tensors
         config_path = result.parent / "config.json"
         with config_path.open() as f:
             config = json.load(f)
         assert config["author"] == "test"
         assert config["version"] == "1.0"
+        assert config["step"] == 3
 
     def test_export_safe_tensor_rejects_metadata_config_override(
         self, exporter: ModelExporter, tmp_path: Path
