@@ -8,7 +8,7 @@ from typing import Any, cast
 import torch
 from torch import Tensor
 
-from .config import TepidH1Config
+from .config import SequenceMixer, TepidH1Config
 from .modeling import AttentionState, TepidH1CausalLM
 from .modeling.cache import AttentionCache
 
@@ -119,12 +119,16 @@ class InferenceEngine:
 
         effective_config = _merge_generation_config(config, kwargs)
 
+        input_ids = _prepare_generation_input_ids(input_ids, self._config.vocab_size)
+        _validate_generation_context_length(
+            input_ids.shape[1],
+            effective_config.max_new_tokens,
+            self._config,
+        )
         _validate_generation_token_ids(effective_config, self._config.vocab_size)
         device, dtype = _resolve_generation_execution(effective_config)
         self.model = self.model.to(device=device, dtype=dtype)
-        input_ids = _prepare_generation_input_ids(input_ids, self._config.vocab_size).to(
-            device=device
-        )
+        input_ids = input_ids.to(device=device)
 
         batch_size = input_ids.shape[0]
         original_length = input_ids.shape[1]
@@ -316,6 +320,28 @@ def _prepare_generation_input_ids(input_ids: Tensor, vocab_size: int) -> Tensor:
     if int(input_ids.min().item()) < 0 or int(input_ids.max().item()) >= vocab_size:
         raise ValueError(f"input_ids must contain token ids in [0, {vocab_size})")
     return input_ids
+
+
+def _validate_generation_context_length(
+    input_length: int,
+    max_new_tokens: int,
+    config: TepidH1Config,
+) -> None:
+    requested_length = input_length + max_new_tokens
+    if requested_length > config.max_position_embeddings:
+        raise ValueError(
+            "generation length exceeds max_position_embeddings: "
+            f"{requested_length} > {config.max_position_embeddings}"
+        )
+    uses_global_sparse_reference = any(
+        layer.sequence is SequenceMixer.GLOBAL_SPARSE_ATTENTION for layer in config.layer_plan
+    )
+    if uses_global_sparse_reference and requested_length > config.global_reference_max_tokens:
+        raise RuntimeError(
+            "global sparse production kernel is not implemented; "
+            "generation reference fallback is limited to "
+            f"{config.global_reference_max_tokens} total tokens"
+        )
 
 
 def _apply_repetition_penalty(

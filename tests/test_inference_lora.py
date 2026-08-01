@@ -1,5 +1,6 @@
 """Integration tests for InferenceEngine and LoRA adapter."""
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -17,6 +18,7 @@ from tepid_h1.inference import (
     _suppress_pad_token,
     _top_k_filter,
     _top_p_filter,
+    _validate_generation_context_length,
     _validate_generation_token_ids,
     decode_text,
 )
@@ -199,6 +201,30 @@ class TestInferenceEngine:
             _prepare_generation_input_ids(torch.ones(1, 2), vocab_size=8)
         with pytest.raises(ValueError, match=r"\[0, 8\)"):
             _prepare_generation_input_ids(torch.tensor([[0, 8]], dtype=torch.long), vocab_size=8)
+
+    def test_generation_context_length_rejects_position_overrun(self):
+        config = TepidH1Config.smoke()
+
+        with pytest.raises(ValueError, match="max_position_embeddings"):
+            _validate_generation_context_length(
+                input_length=config.max_position_embeddings,
+                max_new_tokens=1,
+                config=config,
+            )
+
+    def test_generation_context_length_rejects_global_reference_overrun(self):
+        config = replace(
+            TepidH1Config.smoke(),
+            max_position_embeddings=128,
+            global_reference_max_tokens=8,
+        )
+
+        with pytest.raises(RuntimeError, match="reference fallback"):
+            _validate_generation_context_length(
+                input_length=7,
+                max_new_tokens=2,
+                config=config,
+            )
 
     def test_generation_special_token_ids_must_be_integers(self):
         with pytest.raises(TypeError, match="eos_token_id"):

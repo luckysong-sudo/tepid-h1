@@ -90,7 +90,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="training_and_evaluation",
-        percent=90,
+        percent=91,
         evidence=(
             "smoke training, checkpoint resume and validation contracts are implemented",
             "retrieval generation/scoring and paired baseline reports are covered",
@@ -115,6 +115,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "checkpoint loading rejects scheduler mismatches before mutating model state",
             "generation keyword overrides are applied by explicit presence, not default values",
             "generation validates prompt shape, dtype and token range before model execution",
+            "generation rejects context lengths beyond model and reference-kernel limits",
         ),
         gaps=(
             "no decision-grade long-window model quality experiment exists yet",
