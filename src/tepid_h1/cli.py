@@ -64,6 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="check whether the local host and active PyTorch runtime can use CUDA",
     )
     gpu_preflight.add_argument("--nvidia-smi", type=Path)
+    gpu_preflight.add_argument("--minimum-operator-memory-mib", type=int, default=8192)
     gpu_preflight.add_argument("--report", type=Path)
     decontamination = subparsers.add_parser(
         "decontaminate",
@@ -325,7 +326,8 @@ def main() -> int:
 
         gpu_report = build_local_gpu_preflight_report(
             LocalGPUPreflightConfig(
-                nvidia_smi_path=str(args.nvidia_smi) if args.nvidia_smi else None
+                nvidia_smi_path=str(args.nvidia_smi) if args.nvidia_smi else None,
+                minimum_operator_memory_mib=args.minimum_operator_memory_mib,
             )
         )
         _write_payload(gpu_report, args.report)

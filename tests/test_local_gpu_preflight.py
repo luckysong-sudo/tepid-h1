@@ -86,11 +86,19 @@ class LocalGPUPreflightTests(unittest.TestCase):
         from tepid_h1.integrations.local_gpu import _capacity_warnings
 
         warnings = _capacity_warnings(
-            {"gpus": [{"name": "GeForce MX150", "memory_total_mib": 2048}]}
+            {"gpus": [{"name": "GeForce MX150", "memory_total_mib": 2048}]},
+            minimum_operator_memory_mib=4096,
         )
 
         self.assertEqual(len(warnings), 1)
-        self.assertIn("smoke and operator-level", warnings[0])
+        self.assertIn("4096 MiB", warnings[0])
+        self.assertIn("smoke checks only", warnings[0])
+
+    def test_preflight_config_rejects_invalid_memory_threshold(self):
+        from tepid_h1.integrations import LocalGPUPreflightConfig
+
+        with self.assertRaisesRegex(ValueError, "minimum_operator_memory_mib"):
+            LocalGPUPreflightConfig(minimum_operator_memory_mib=0)
 
     def test_readiness_distinguishes_smoke_and_scale_training(self):
         from tepid_h1.integrations.local_gpu import _readiness
