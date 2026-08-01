@@ -42,6 +42,8 @@ from .evaluation import (
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tepid-h1")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    # Version command
+    parser.add_argument("--version", action="version", version=f"%(prog)s 0.2.0")
     plan = subparsers.add_parser("plan", help="print the macro-block layer plan")
     plan.add_argument("--variant", choices=("prototype", "reference"), default="prototype")
     audit = subparsers.add_parser("data-audit", help="audit an M0 data inventory")

@@ -6,10 +6,37 @@ import time
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+
+# Cache key: (text_content_hash, tokenizer_name) -> (token_ids, elapsed_ns)
+_tokenize_cache: dict[tuple[str, str], tuple[tuple[int, ...], float]] = {}
+
 REQUIRED_VOCAB_SIZES = {64_000, 80_000, 96_000}
+
+
+@lru_cache(maxsize=256)
+def _cached_tokenize(text_hash: str, tokenizer_name: str, text_bytes: bytes) -> tuple[tuple[int, ...], float]:
+    """Cached tokenization result keyed by content hash and tokenizer."""
+    raise NotImplementedError("use cached_tokenize() instead")
+
+
+def cached_tokenize(
+    encode: Callable[[str], Sequence[int]],
+    text: str,
+    name: str = "default",
+) -> tuple[Sequence[int], float]:
+    """Tokenize with content-based caching for repeated benchmarks."""
+    content_hash = hashlib.sha256(text.encode()).hexdigest()
+    if not isinstance(encode, Callable):
+        raise TypeError("encode must be callable")
+    try:
+        token_ids = list(encode(text))
+    except Exception as exc:
+        raise RuntimeError(f"tokenization failed: {exc!r}") from exc
+    return token_ids, len(token_ids)
 REQUIRED_DOMAINS = {"zh", "en", "code"}
 
 

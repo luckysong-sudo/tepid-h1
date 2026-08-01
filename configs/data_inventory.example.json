@@ -9,7 +9,7 @@
       "name": "Synthetic governed paired-experiment fixture",
       "uri": "repo://configs/paired_corpus.example.jsonl",
       "snapshot": "v1",
-      "sha256": "882c60467be6da41b53ec15a650d25d5e3f612c2e32da332bb258bb36e76aa0b",
+      "sha256": "2ae1a0df1075f43d7b37ac623c6f85d06dc0432a07449714918b8b9032340773",
       "license_id": "CC0-1.0",
       "license_category": "public_domain",
       "commercial_use": true,

@@ -6,8 +6,7 @@ import torch
 from torch import Tensor, nn
 from torch.nn import functional as F
 
-from tepid_h1.config import ChannelMixer, SequenceMixer, TepidH1Config
-
+from ..config import ChannelMixer, SequenceMixer, TepidH1Config
 from .layers import (
     AttentionState,
     GatedDeltaMemoryEager,

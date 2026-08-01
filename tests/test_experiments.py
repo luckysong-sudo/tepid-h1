@@ -203,14 +203,15 @@ def _write_governed_fixture(
     checksum: str | None = None,
 ) -> tuple[Path, Path]:
     corpus_path = directory / "corpus.jsonl"
+    # Use binary write to ensure LF line endings regardless of platform
     corpus_text = (
-        '{"id":"sample-1","source_id":"test-source","domain":"en",'
-        '"token_ids":[1,2,3,4,5,6]}\n'
-        '{"id":"sample-2","source_id":"test-source","domain":"code",'
-        '"token_ids":[7,8,9,10,11,12]}\n'
+        b'{"id":"sample-1","source_id":"test-source","domain":"en",'
+        b'"token_ids":[1,2,3,4,5,6]}\n'
+        b'{"id":"sample-2","source_id":"test-source","domain":"code",'
+        b'"token_ids":[7,8,9,10,11,12]}\n'
     )
-    corpus_path.write_text(corpus_text, encoding="utf-8")
-    actual_checksum = hashlib.sha256(corpus_text.encode()).hexdigest()
+    corpus_path.write_bytes(corpus_text)
+    actual_checksum = hashlib.sha256(corpus_text).hexdigest()
     inventory = {
         "schema_version": 1,
         "inventory_id": "test-inventory",

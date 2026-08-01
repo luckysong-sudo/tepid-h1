@@ -8,11 +8,27 @@ from .baseline import (
     comparison_report,
     hybrid_parameter_estimate,
 )
-from .layers import AttentionState
+from .layers import (
+    AttentionState,
+    GQAAttentionNative,
+    GQAAttentionReference,
+    GlobalSparseAttentionReference,
+    GatedDeltaMemoryEager,
+    GatedDeltaMemoryReference,
+    RoutedMoEReference,
+    SwiGLU,
+)
 from .model import TepidH1CausalLM, TepidH1Model, TepidH1Output
 
 __all__ = [
     "AttentionState",
+    "GQAAttentionNative",
+    "GQAAttentionReference",
+    "GlobalSparseAttentionReference",
+    "GatedDeltaMemoryEager",
+    "GatedDeltaMemoryReference",
+    "RoutedMoEReference",
+    "SwiGLU",
     "TepidH1CausalLM",
     "TepidH1Model",
     "TepidH1Output",

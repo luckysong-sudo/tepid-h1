@@ -95,6 +95,7 @@ class GatedDeltaMemoryReference(nn.Module):
 
     def __init__(self, config: TepidH1Config) -> None:
         super().__init__()
+        self.config = config
         self.num_heads = config.num_query_heads
         self.head_dim = config.head_dim
         projection_width = 6 * config.hidden_size
@@ -110,6 +111,19 @@ class GatedDeltaMemoryReference(nn.Module):
             device=device,
             dtype=dtype,
         )
+
+    @staticmethod
+    def _prepare_delta_state(config: TepidH1Config, x: Tensor, state: Tensor | None) -> Tensor:
+        """Initialize or validate delta state tensor. Returns validated state."""
+        batch_size = x.shape[0]
+        if state is None:
+            return GatedDeltaMemoryReference(config).initial_state(
+                batch_size, device=x.device, dtype=x.dtype
+            )
+        expected = (batch_size, config.num_query_heads, config.head_dim, config.head_dim)
+        if tuple(state.shape) != expected:
+            raise ValueError(f"delta state shape must be {expected}, got {tuple(state.shape)}")
+        return state
 
     def forward(self, x: Tensor, state: Tensor | None = None) -> tuple[Tensor, Tensor]:
         batch_size, sequence_length, hidden_size = x.shape
@@ -127,11 +141,7 @@ class GatedDeltaMemoryReference(nn.Module):
         erase = torch.sigmoid(raw_erase)
         write = torch.sigmoid(raw_write)
 
-        if state is None:
-            state = self.initial_state(batch_size, device=x.device, dtype=x.dtype)
-        expected = (batch_size, self.num_heads, self.head_dim, self.head_dim)
-        if tuple(state.shape) != expected:
-            raise ValueError(f"delta state shape must be {expected}, got {tuple(state.shape)}")
+        state = self._prepare_delta_state(self.config, x, state)
 
         outputs: list[Tensor] = []
         for step in range(sequence_length):
@@ -174,11 +184,7 @@ class GatedDeltaMemoryEager(GatedDeltaMemoryReference):
         erase = torch.sigmoid(raw_erase)
         write = torch.sigmoid(raw_write)
 
-        if state is None:
-            state = self.initial_state(batch_size, device=x.device, dtype=x.dtype)
-        expected = (batch_size, self.num_heads, self.head_dim, self.head_dim)
-        if tuple(state.shape) != expected:
-            raise ValueError(f"delta state shape must be {expected}, got {tuple(state.shape)}")
+        state = self._prepare_delta_state(self.config, x, state)
 
         outputs: list[Tensor] = []
         for step in range(sequence_length):

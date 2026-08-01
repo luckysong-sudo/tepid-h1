@@ -1,0 +1,163 @@
+"""Model export utilities for production deployment."""
+from __future__ import annotations
+
+import json
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any
+
+import torch
+import torch.nn as nn
+
+
+class ModelExporter:
+    """Exports models to various formats for deployment."""
+
+    def __init__(self, model: nn.Module, config: Any) -> None:
+        self.model = model
+        self.config = config
+
+    def export_torchscript(
+        self,
+        output_path: Path,
+        example_input: torch.Tensor | None = None,
+    ) -> Path:
+        """Export model to TorchScript format.
+
+        Args:
+            output_path: Path to save the TorchScript model.
+            example_input: Example input for tracing.
+
+        Returns:
+            Path to the exported model.
+        """
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self.model.eval()
+        with torch.no_grad():
+            if example_input is not None:
+                traced = torch.jit.trace(self.model, example_input)
+                traced.save(str(output_path))
+            else:
+                scripted = torch.jit.script(self.model)
+                scripted.save(str(output_path))
+
+        return output_path
+
+    def export_onnx(
+        self,
+        output_path: Path,
+        input_shape: tuple[int, ...] = (1, 512),
+        opset_version: int = 17,
+    ) -> Path:
+        """Export model to ONNX format.
+
+        Args:
+            output_path: Path to save the ONNX model.
+            input_shape: Input tensor shape (batch_size, sequence_length).
+            opset_version: ONNX opset version.
+
+        Returns:
+            Path to the exported model.
+        """
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self.model.eval()
+        dummy_input = torch.randint(0, self.config.vocab_size, input_shape)
+
+        torch.onnx.export(
+            self.model,
+            dummy_input,
+            str(output_path),
+            opset_version=opset_version,
+            input_names=["input_ids"],
+            output_names=["logits"],
+            dynamic_axes={
+                "input_ids": {0: "batch_size", 1: "sequence_length"},
+                "logits": {0: "batch_size", 1: "sequence_length"},
+            },
+        )
+
+        return output_path
+
+    def export_safe_tensor(
+        self,
+        output_path: Path,
+        metadata: dict[str, Any] | None = None,
+    ) -> Path:
+        """Export model weights to SafeTensor format.
+
+        Args:
+            output_path: Path to save the SafeTensor file.
+            metadata: Additional metadata to include.
+
+        Returns:
+            Path to the exported weights.
+        """
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        state_dict = self.model.state_dict()
+
+        # Export using torch's built-in save for now
+        # In production, use safetensors library
+        torch.save(state_dict, str(output_path))
+
+        # Save config separately
+        config_path = output_path.parent / "config.json"
+        config_dict = asdict(self.config) if hasattr(self.config, "__dataclass_fields__") else self.config
+        if metadata:
+            config_dict.update(metadata)
+        config_path.write_text(json.dumps(config_dict, indent=2, ensure_ascii=False))
+
+        return output_path
+
+    def export_for_inference(
+        self,
+        output_dir: Path,
+        formats: list[str] | None = None,
+    ) -> dict[str, Path]:
+        """Export model in multiple formats.
+
+        Args:
+            output_dir: Directory to save exported models.
+            formats: List of formats to export ("torchscript", "onnx", "safetensors").
+
+        Returns:
+            Dictionary mapping format names to output paths.
+        """
+        if formats is None:
+            formats = ["torchscript", "onnx", "safetensors"]
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        exports: dict[str, Path] = {}
+
+        for fmt in formats:
+            if fmt == "torchscript":
+                exports["torchscript"] = self.export_torchscript(
+                    output_dir / "model.pt"
+                )
+            elif fmt == "onnx":
+                exports["onnx"] = self.export_onnx(
+                    output_dir / "model.onnx"
+                )
+            elif fmt == "safetensors":
+                exports["safetensors"] = self.export_safe_tensor(
+                    output_dir / "model.safetensors"
+                )
+
+        return exports
+
+    def get_export_config(self) -> dict[str, Any]:
+        """Get configuration for model export.
+
+        Returns:
+            Dictionary with export configuration.
+        """
+        return {
+            "vocab_size": self.config.vocab_size,
+            "hidden_size": self.config.hidden_size,
+            "num_layers": self.config.num_layers,
+            "num_query_heads": self.config.num_query_heads,
+            "num_kv_heads": self.config.num_kv_heads,
+            "head_dim": self.config.head_dim,
+        }

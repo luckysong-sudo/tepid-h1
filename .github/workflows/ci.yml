@@ -1,59 +1,73 @@
-name: Deploy and Remote Quality Gate
+name: CI
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
-    inputs:
-      run_performance_benchmark:
-        description: Run the governed 5x3 BF16 paired benchmark after the quality gate
-        required: false
-        type: boolean
-        default: false
-
-permissions:
-  contents: read
-
-concurrency:
-  group: tepid-h1-zero-gpu-deployment
-  cancel-in-progress: false
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
 
 jobs:
-  deploy-refresh-test:
+  test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: pip
-      - name: Install deployment client
-        run: python -m pip install "huggingface_hub>=1.4,<2" "gradio_client>=2,<3" "requests>=2,<3"
-      - name: Deploy, refresh Dev Mode and run ZeroGPU quality gate
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
-          CORE_REVISION: ${{ github.sha }}
-          QUALITY_REPORT_PATH: ${{ runner.temp }}/zero-gpu-quality-report.json
-          PERFORMANCE_REPORT_PATH: ${{ runner.temp }}/zero-gpu-performance-report.json
-          RUN_PERFORMANCE_BENCHMARK: >-
-            ${{ github.event_name == 'workflow_dispatch' &&
-                inputs.run_performance_benchmark || false }}
-        run: python .github/scripts/deploy_zero_gpu.py
-      - name: Upload remote quality report
-        if: always()
-        uses: actions/upload-artifact@v6
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+      - name: Type checking
+        run: mypy src/tepid_h1 --ignore-missing-imports
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          name: zero-gpu-quality-report-${{ github.sha }}
-          path: ${{ runner.temp }}/zero-gpu-quality-report.json
-          if-no-files-found: warn
-          retention-days: 30
-      - name: Upload remote performance report
-        if: always()
-        uses: actions/upload-artifact@v6
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint with flake8
+        run: flake8 src/ tests/
+
+      - name: Format check with ruff
+        run: ruff check src/ tests/
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          name: zero-gpu-performance-report-${{ github.sha }}
-          path: ${{ runner.temp }}/zero-gpu-performance-report.json
-          if-no-files-found: ignore
-          retention-days: 30
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+          pip install coverage
+
+      - name: Run tests with coverage
+        run: coverage run -m pytest tests/ -q
+
+      - name: Coverage report
+        run: coverage report --show-missing

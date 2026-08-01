@@ -10,12 +10,13 @@ from .defaults import (
 from .protocols import (
     AgentAction,
     FinalAnswer,
+    ModelValidationError,
     PolicyDecision,
     RuntimeState,
     ToolCall,
     ToolResult,
 )
-from .runtime import AgentRuntime, BudgetExceeded, RuntimeDependencies
+from .runtime import AgentRuntime, BudgetExceeded, RetryExhausted, RuntimeDependencies
 
 __all__ = [
     "AgentAction",
@@ -25,7 +26,9 @@ __all__ = [
     "EvidenceVerifier",
     "FinalAnswer",
     "ListTelemetry",
+    "ModelValidationError",
     "PolicyDecision",
+    "RetryExhausted",
     "RuntimeDependencies",
     "RuntimeState",
     "StateContextBuilder",

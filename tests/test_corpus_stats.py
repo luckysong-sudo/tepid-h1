@@ -12,8 +12,8 @@ from tepid_h1.data import (
 
 
 class CorpusStatsTests(unittest.TestCase):
-    def _write_corpus(self, directory: Path, lines: list[str]) -> Path:
-        path = directory / "corpus.jsonl"
+    def _write_corpus(self, directory: Path, filename: str, lines: list[str]) -> Path:
+        path = directory / filename
         path.write_text("".join(line + "\n" for line in lines), encoding="utf-8")
         return path
 
@@ -38,6 +38,7 @@ class CorpusStatsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = self._write_corpus(
                 Path(directory),
+                "duplicates.jsonl",
                 [
                     '{"id":"r1","source_id":"s1","domain":"en","token_ids":[1,2,3]}',
                     '{"id":"r1","source_id":"s1","domain":"en","token_ids":[4,5,6]}',
@@ -50,6 +51,7 @@ class CorpusStatsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = self._write_corpus(
                 Path(directory),
+                "sources.jsonl",
                 [
                     '{"id":"r1","source_id":"s1","domain":"zh","token_ids":[1,2]}',
                     '{"id":"r2","source_id":"s1","domain":"en","token_ids":[3,4,5]}',
@@ -69,7 +71,7 @@ class CorpusStatsTests(unittest.TestCase):
 
     def test_summarize_rejects_empty_corpus(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = self._write_corpus(Path(directory), [])
+            path = self._write_corpus(Path(directory), "empty.jsonl", [])
             with self.assertRaisesRegex(ValueError, "at least one record"):
                 summarize_paired_corpus(path)
 
@@ -77,6 +79,7 @@ class CorpusStatsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = self._write_corpus(
                 Path(directory),
+                "missing_field.jsonl",
                 ['{"id":"r1","source_id":"s1","domain":"en"}'],
             )
             with self.assertRaisesRegex(ValueError, "token_ids"):
@@ -86,6 +89,7 @@ class CorpusStatsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = self._write_corpus(
                 Path(directory),
+                "invalid_token.jsonl",
                 ['{"id":"r1","source_id":"s1","domain":"en","token_ids":[1,"two",3]}'],
             )
             with self.assertRaisesRegex(TypeError, "non-integer"):
@@ -103,16 +107,6 @@ class CorpusStatsTests(unittest.TestCase):
         stats = summarize_paired_corpus("configs/paired_corpus.example.jsonl")
         payload = json.dumps(stats.to_dict(), ensure_ascii=False)
         self.assertIn("record_count", payload)
-
-    def _write_corpus(
-        self,
-        directory: Path,
-        filename: str,
-        lines: list[str],
-    ) -> Path:
-        path = directory / filename
-        path.write_text("".join(line + "\n" for line in lines), encoding="utf-8")
-        return path
 
     def test_check_paired_corpus_isolation_passes_on_disjoint_splits(self):
         with tempfile.TemporaryDirectory() as directory:
