@@ -214,7 +214,7 @@ class TestInferenceEngine:
 
         assert torch.isneginf(filtered[0, 0])
         assert torch.equal(filtered[0, 1], logits[0, 1])
-        assert torch.isneginf(filtered[0, 2])
+        assert torch.equal(filtered[0, 2], logits[0, 2])
 
     def test_sampling_mode_uses_multinomial(self, engine):
         logits = torch.tensor([[0.0, 0.0, 10.0]])

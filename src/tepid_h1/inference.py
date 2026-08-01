@@ -404,6 +404,7 @@ def _top_p_filter(logits: Tensor, top_p: float) -> Tensor:
     sorted_logits, sorted_indices = torch.sort(logits, dim=-1, descending=True)
     cumulative_probs = torch.cumsum(torch.softmax(sorted_logits, dim=-1), dim=-1)
     indices_to_remove = cumulative_probs > top_p
+    indices_to_remove[..., 1:] = indices_to_remove[..., :-1].clone()
     indices_to_remove[..., 0] = False
     sorted_indices_to_remove = indices_to_remove
     indices_to_remove = torch.zeros_like(sorted_indices_to_remove).scatter(
