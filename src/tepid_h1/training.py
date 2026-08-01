@@ -342,6 +342,10 @@ def _count_supervised_target_tokens(
 ) -> int:
     if input_ids.ndim != 2:
         raise ValueError(f"{context} input_ids must have shape [batch, sequence]")
+    if input_ids.shape[0] <= 0:
+        raise ValueError(f"{context} input_ids batch size must be positive")
+    if input_ids.dtype != torch.long:
+        raise TypeError(f"{context} input_ids must use torch.long dtype")
     if labels.shape != input_ids.shape:
         raise ValueError(f"{context} labels must have the same shape as input_ids")
     if labels.dtype != torch.long:
