@@ -90,7 +90,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="training_and_evaluation",
-        percent=73,
+        percent=74,
         evidence=(
             "smoke training, checkpoint resume and validation contracts are implemented",
             "retrieval generation/scoring and paired baseline reports are covered",
@@ -98,6 +98,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "streaming train/eval calls reject incomplete recurrent state tuples",
             "causal-LM loss validates label dtype, ignore index and vocab range before training",
             "autoregressive inference respects explicit greedy versus sampling mode",
+            "repetition penalty uses generated-token history during autoregressive decoding",
         ),
         gaps=(
             "no decision-grade long-window model quality experiment exists yet",

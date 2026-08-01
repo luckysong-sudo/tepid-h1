@@ -5,7 +5,12 @@ import torch
 import torch.nn as nn
 
 from tepid_h1.config import TepidH1Config
-from tepid_h1.inference import GenerateConfig, InferenceEngine, decode_text
+from tepid_h1.inference import (
+    GenerateConfig,
+    InferenceEngine,
+    _apply_repetition_penalty,
+    decode_text,
+)
 from tepid_h1.lora import (
     LoRAConfig,
     apply_lora,
@@ -95,6 +100,7 @@ class TestInferenceEngine:
         torch.manual_seed(1)
         first = engine._sample(
             logits,
+            token_history=None,
             temperature=1.0,
             top_k=0,
             top_p=1.0,
@@ -106,6 +112,7 @@ class TestInferenceEngine:
         torch.manual_seed(999)
         second = engine._sample(
             logits,
+            token_history=None,
             temperature=1.0,
             top_k=0,
             top_p=1.0,
@@ -123,6 +130,7 @@ class TestInferenceEngine:
 
         sampled = engine._sample(
             logits,
+            token_history=None,
             temperature=1.0,
             top_k=0,
             top_p=1.0,
@@ -133,6 +141,32 @@ class TestInferenceEngine:
         )
 
         assert sampled.shape == (1, 1)
+
+    def test_repetition_penalty_uses_token_history_by_batch(self):
+        logits = torch.tensor([[4.0, -2.0, 1.0, 0.5], [0.0, 3.0, -1.0, 2.0]])
+        token_history = torch.tensor([[0, 1, 1], [2, 3, 99]])
+
+        penalized = _apply_repetition_penalty(logits, token_history, 2.0)
+
+        expected = torch.tensor([[2.0, -4.0, 1.0, 0.5], [0.0, 3.0, -2.0, 1.0]])
+        assert torch.equal(penalized, expected)
+
+    def test_greedy_sample_applies_repetition_penalty_to_history(self, engine):
+        logits = torch.tensor([[5.0, 4.0]])
+
+        next_token = engine._sample(
+            logits,
+            token_history=torch.tensor([[0]]),
+            temperature=1.0,
+            top_k=0,
+            top_p=1.0,
+            repetition_penalty=2.0,
+            pad_token_id=None,
+            eos_token_id=None,
+            do_sample=False,
+        )
+
+        assert torch.equal(next_token, torch.tensor([[1]]))
 
     def test_generate_with_eos(self, engine):
         """Test generation stopping at EOS token."""

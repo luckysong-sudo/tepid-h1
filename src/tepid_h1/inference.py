@@ -209,6 +209,7 @@ class InferenceEngine:
 
             next_token_ids = self._sample(
                 next_logits,
+                token_history=generated_ids,
                 temperature=effective_config.temperature,
                 top_k=effective_config.top_k,
                 top_p=effective_config.top_p,
@@ -241,6 +242,7 @@ class InferenceEngine:
         self,
         logits: Tensor,
         *,
+        token_history: Tensor | None,
         temperature: float,
         top_k: int,
         top_p: float,
@@ -250,8 +252,8 @@ class InferenceEngine:
         do_sample: bool,
     ) -> Tensor:
         """Select the next token from logits."""
-        if repetition_penalty > 1.0:
-            logits = _apply_repetition_penalty(logits, repetition_penalty)
+        if repetition_penalty > 1.0 and token_history is not None:
+            logits = _apply_repetition_penalty(logits, token_history, repetition_penalty)
 
         if top_k > 0:
             logits = _top_k_filter(logits, top_k)
@@ -272,17 +274,27 @@ class InferenceEngine:
 
 def _apply_repetition_penalty(
     logits: Tensor,
+    token_history: Tensor,
     repetition_penalty: float,
 ) -> Tensor:
-    """Apply repetition penalty to logits."""
-    if logits.ndim != 2:
+    """Apply repetition penalty to tokens already present in each sequence."""
+    if logits.ndim != 2 or token_history.ndim != 2:
         return logits
+    if token_history.shape[0] != logits.shape[0]:
+        raise ValueError("token_history batch size must match logits")
+
     penalized = logits.clone()
-    for token_ids in torch.unique(logits.argmax(dim=-1)):
-        penalized[token_ids < token_ids + 1] = torch.where(
-            penalized[token_ids < token_ids + 1] > 0,
-            penalized[token_ids < token_ids + 1] / repetition_penalty,
-            penalized[token_ids < token_ids + 1] * repetition_penalty,
+    vocab_size = logits.shape[-1]
+    for row, token_ids in enumerate(token_history):
+        unique_ids = torch.unique(token_ids)
+        valid_ids = unique_ids[(unique_ids >= 0) & (unique_ids < vocab_size)]
+        if valid_ids.numel() == 0:
+            continue
+        values = penalized[row, valid_ids]
+        penalized[row, valid_ids] = torch.where(
+            values > 0,
+            values / repetition_penalty,
+            values * repetition_penalty,
         )
     return penalized
 
