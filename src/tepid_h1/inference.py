@@ -129,9 +129,7 @@ class InferenceEngine:
                 kwargs_config.num_return_sequences,
                 "num_return_sequences",
             ),
-            do_sample=kwargs_config.do_sample
-            if kwargs_config.do_sample is not None
-            else gen_config.do_sample,
+            do_sample=_override(gen_config.do_sample, kwargs_config.do_sample, "do_sample"),
             device=_override(gen_config.device, kwargs_config.device, "device"),
             dtype=_override(gen_config.dtype, kwargs_config.dtype, "dtype"),
         )
@@ -217,6 +215,7 @@ class InferenceEngine:
                 repetition_penalty=effective_config.repetition_penalty,
                 pad_token_id=effective_config.pad_token_id,
                 eos_token_id=effective_config.eos_token_id,
+                do_sample=effective_config.do_sample,
             )
 
             generated_ids = torch.cat([generated_ids, next_token_ids], dim=1)
@@ -233,6 +232,7 @@ class InferenceEngine:
             "num_return_sequences": effective_config.num_return_sequences,
             "max_new_tokens": effective_config.max_new_tokens,
             "temperature": effective_config.temperature,
+            "do_sample": effective_config.do_sample,
             "use_kv_cache": self._use_kv_cache,
         }
         return generated_ids, metadata
@@ -247,8 +247,9 @@ class InferenceEngine:
         repetition_penalty: float,
         pad_token_id: int | None,
         eos_token_id: int | None,
+        do_sample: bool,
     ) -> Tensor:
-        """Sample next token from logits."""
+        """Select the next token from logits."""
         if repetition_penalty > 1.0:
             logits = _apply_repetition_penalty(logits, repetition_penalty)
 
@@ -260,6 +261,9 @@ class InferenceEngine:
 
         if temperature > 0.0:
             logits = logits / temperature
+
+        if not do_sample:
+            return logits.argmax(dim=-1, keepdim=True)
 
         probs = torch.softmax(logits, dim=-1)
         next_token = torch.multinomial(probs, num_samples=1)

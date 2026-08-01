@@ -79,6 +79,61 @@ class TestInferenceEngine:
         # Same engine, same weights, same seed => deterministic with do_sample=False
         assert torch.equal(generated1, generated2)
 
+    def test_generate_config_do_sample_false_is_preserved(self, engine):
+        input_ids = torch.tensor([[1, 2, 3]])
+
+        _, metadata = engine.generate(
+            input_ids,
+            config=GenerateConfig(max_new_tokens=1, do_sample=False),
+        )
+
+        assert metadata["do_sample"] is False
+
+    def test_greedy_sample_uses_argmax_without_rng(self, engine):
+        logits = torch.tensor([[0.0, 10.0, 9.0]])
+
+        torch.manual_seed(1)
+        first = engine._sample(
+            logits,
+            temperature=1.0,
+            top_k=0,
+            top_p=1.0,
+            repetition_penalty=1.0,
+            pad_token_id=None,
+            eos_token_id=None,
+            do_sample=False,
+        )
+        torch.manual_seed(999)
+        second = engine._sample(
+            logits,
+            temperature=1.0,
+            top_k=0,
+            top_p=1.0,
+            repetition_penalty=1.0,
+            pad_token_id=None,
+            eos_token_id=None,
+            do_sample=False,
+        )
+
+        assert torch.equal(first, torch.tensor([[1]]))
+        assert torch.equal(first, second)
+
+    def test_sampling_mode_uses_multinomial(self, engine):
+        logits = torch.tensor([[0.0, 0.0, 10.0]])
+
+        sampled = engine._sample(
+            logits,
+            temperature=1.0,
+            top_k=0,
+            top_p=1.0,
+            repetition_penalty=1.0,
+            pad_token_id=None,
+            eos_token_id=None,
+            do_sample=True,
+        )
+
+        assert sampled.shape == (1, 1)
+
     def test_generate_with_eos(self, engine):
         """Test generation stopping at EOS token."""
 
