@@ -218,8 +218,10 @@ def save_checkpoint(
     step: int,
     metadata: Mapping[str, Any] | None = None,
 ) -> None:
-    if step < 0:
-        raise ValueError("checkpoint step must be non-negative")
+    if not isinstance(step, int) or isinstance(step, bool) or step < 0:
+        raise ValueError("checkpoint step must be a non-negative integer")
+    if scheduler is not None and scheduler.completed_steps != step:
+        raise ValueError("checkpoint scheduler step must match checkpoint step")
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     checkpoint_metadata = dict(metadata or {})

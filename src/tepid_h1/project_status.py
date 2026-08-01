@@ -90,7 +90,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="training_and_evaluation",
-        percent=86,
+        percent=87,
         evidence=(
             "smoke training, checkpoint resume and validation contracts are implemented",
             "retrieval generation/scoring and paired baseline reports are covered",
@@ -111,6 +111,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "evaluation supports masked labels and weights loss by valid target tokens",
             "training rejects batches without supervised target tokens before forward",
             "training and evaluation validate supervised target shapes before forward",
+            "checkpoint saving rejects invalid step types and scheduler-step mismatches",
         ),
         gaps=(
             "no decision-grade long-window model quality experiment exists yet",

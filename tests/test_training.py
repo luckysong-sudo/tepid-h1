@@ -296,6 +296,43 @@ class TrainingTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not match"):
                 load_checkpoint(checkpoint, model=different)
 
+    def test_checkpoint_save_rejects_invalid_step_type(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import save_checkpoint
+
+        model = TepidH1CausalLM(TepidH1Config.smoke())
+        optimizer = torch.optim.AdamW(model.parameters())
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "invalid.pt"
+            with self.assertRaisesRegex(ValueError, "non-negative integer"):
+                save_checkpoint(checkpoint, model=model, optimizer=optimizer, step=True)
+
+            self.assertFalse(checkpoint.exists())
+
+    def test_checkpoint_save_rejects_scheduler_step_mismatch(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import WarmupCosineScheduler, save_checkpoint
+
+        model = TepidH1CausalLM(TepidH1Config.smoke())
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        scheduler = WarmupCosineScheduler(optimizer, warmup_steps=0, total_steps=4)
+        scheduler.step()
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "mismatch.pt"
+            with self.assertRaisesRegex(ValueError, "scheduler step"):
+                save_checkpoint(
+                    checkpoint,
+                    model=model,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    step=0,
+                )
+
+            self.assertFalse(checkpoint.exists())
+
     def test_resume_contract_fails_closed_on_data_or_recipe_change(self):
         from tepid_h1.training import validate_resume_contract
 
