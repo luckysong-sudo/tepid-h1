@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 try:
     import torch
@@ -70,6 +71,71 @@ class TrainingTests(unittest.TestCase):
         ):
             torch.testing.assert_close(after, before, rtol=0, atol=0)
             self.assertIsNone(after.grad)
+
+    def test_evaluation_uses_masked_labels_for_token_weighting(self):
+        from tepid_h1.training import evaluate_causal_lm
+
+        class FakeModel:
+            def __init__(self):
+                self.training = True
+                self.losses = iter((torch.tensor(2.0), torch.tensor(4.0)))
+                self.seen_labels = []
+
+            def eval(self):
+                self.training = False
+
+            def train(self, mode=True):
+                self.training = mode
+
+            def __call__(self, input_ids, labels=None):
+                self.seen_labels.append(labels)
+                return SimpleNamespace(loss=next(self.losses))
+
+        model = FakeModel()
+        batches = (torch.tensor([[1, 2, 3, 4]]), torch.tensor([[5, 6, 7, 8]]))
+        labels = (torch.tensor([[1, 2, -100, 4]]), torch.tensor([[5, -100, -100, 8]]))
+
+        metrics = evaluate_causal_lm(model, batches, labels_batches=labels)
+
+        self.assertTrue(model.training)
+        self.assertEqual(model.seen_labels, list(labels))
+        self.assertEqual(metrics.evaluated_tokens, 3)
+        self.assertAlmostEqual(metrics.loss, 8 / 3)
+
+    def test_evaluation_rejects_mismatched_labels_batches(self):
+        from tepid_h1.training import evaluate_causal_lm
+
+        class FakeModel:
+            training = True
+
+        with self.assertRaisesRegex(ValueError, "labels_batches"):
+            evaluate_causal_lm(
+                FakeModel(),
+                (torch.tensor([[1, 2, 3]]),),
+                labels_batches=(torch.tensor([[1, 2, 3]]), torch.tensor([[4, 5, 6]])),
+            )
+
+    def test_evaluation_rejects_batches_without_target_tokens(self):
+        from tepid_h1.training import evaluate_causal_lm
+
+        class FakeModel:
+            training = True
+
+            def eval(self):
+                self.training = False
+
+            def train(self, mode=True):
+                self.training = mode
+
+            def __call__(self, input_ids, labels=None):
+                return SimpleNamespace(loss=torch.tensor(1.0))
+
+        with self.assertRaisesRegex(ValueError, "target token"):
+            evaluate_causal_lm(
+                FakeModel(),
+                (torch.tensor([[1, 2, 3]]),),
+                labels_batches=(torch.full((1, 3), -100),),
+            )
 
     def test_checkpoint_round_trip_restores_model_and_optimizer(self):
         from tepid_h1.config import TepidH1Config

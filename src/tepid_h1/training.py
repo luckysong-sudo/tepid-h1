@@ -170,20 +170,29 @@ def causal_lm_train_step(
 def evaluate_causal_lm(
     model: TrainableCausalLM,
     batches: tuple[Tensor, ...],
+    *,
+    labels_batches: tuple[Tensor | None, ...] | None = None,
 ) -> EvaluationMetrics:
     if not batches:
         raise ValueError("evaluation requires at least one batch")
+    if labels_batches is None:
+        labels_batches = tuple(None for _ in batches)
+    if len(labels_batches) != len(batches):
+        raise ValueError("labels_batches must match batches length")
     was_training = model.training
     weighted_loss = 0.0
     evaluated_tokens = 0
     try:
         model.eval()
         with torch.no_grad():
-            for input_ids in batches:
-                output = model(input_ids, labels=input_ids)
+            for input_ids, labels in zip(batches, labels_batches, strict=True):
+                targets = input_ids if labels is None else labels
+                output = model(input_ids, labels=targets)
                 if output.loss is None or not torch.isfinite(output.loss):
                     raise NonFiniteTrainingError("evaluation loss is NaN or Inf")
-                batch_tokens = int(input_ids[:, 1:].numel())
+                batch_tokens = int((targets[:, 1:] != -100).sum().item())
+                if batch_tokens <= 0:
+                    raise ValueError("evaluation labels must include at least one target token")
                 weighted_loss += float(output.loss) * batch_tokens
                 evaluated_tokens += batch_tokens
     finally:
