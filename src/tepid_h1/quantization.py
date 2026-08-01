@@ -570,10 +570,17 @@ def load_quantized_model(
                 f"quantized layer {name!r} weight shape {tuple(weight.shape)!r} "
                 f"does not match expected {expected_weight_shape!r}"
             )
-        if bias is not None and tuple(bias.shape) != (original_shape[0],):
-            raise ValueError(f"quantized layer {name!r} bias shape does not match output dim")
-        if dequantized_cache is not None and tuple(dequantized_cache.shape) != original_shape:
-            raise ValueError(f"quantized layer {name!r} dequantized cache shape is invalid")
+        _validate_loaded_layer_tensors(
+            name=name,
+            mode=mode,
+            weight=weight,
+            scales=scales,
+            zeros=zeros,
+            bias=bias,
+            dequantized_cache=dequantized_cache,
+            original_dtype=original_dtype,
+            original_shape=original_shape,
+        )
 
         loaded[name] = QuantizedLayer(
             weight=weight,
@@ -594,6 +601,72 @@ def _load_quantization_mode(layer_artifact: dict[str, Any], name: str) -> Quanti
         return QuantizationMode(raw_mode)
     except ValueError as error:
         raise ValueError(f"quantized layer {name!r} has invalid quantization_mode") from error
+
+
+def _validate_loaded_layer_tensors(
+    *,
+    name: str,
+    mode: QuantizationMode,
+    weight: torch.Tensor,
+    scales: torch.Tensor,
+    zeros: torch.Tensor | None,
+    bias: torch.Tensor | None,
+    dequantized_cache: torch.Tensor | None,
+    original_dtype: torch.dtype,
+    original_shape: tuple[int, ...],
+) -> None:
+    expected_dtype = _expected_quantized_weight_dtype(mode, zeros)
+    if weight.dtype != expected_dtype:
+        raise ValueError(
+            f"quantized layer {name!r} weight dtype {weight.dtype} "
+            f"does not match expected {expected_dtype}"
+        )
+    if not scales.is_floating_point():
+        raise ValueError(f"quantized layer {name!r} scales must be floating point")
+    if zeros is not None and not zeros.is_floating_point():
+        raise ValueError(f"quantized layer {name!r} zeros must be floating point")
+    if bias is not None:
+        if tuple(bias.shape) != (original_shape[0],):
+            raise ValueError(f"quantized layer {name!r} bias shape does not match output dim")
+        if bias.dtype != original_dtype:
+            raise ValueError(f"quantized layer {name!r} bias dtype does not match original_dtype")
+    if dequantized_cache is not None:
+        if tuple(dequantized_cache.shape) != original_shape:
+            raise ValueError(f"quantized layer {name!r} dequantized cache shape is invalid")
+        if dequantized_cache.dtype != original_dtype:
+            raise ValueError(
+                f"quantized layer {name!r} dequantized cache dtype does not match original_dtype"
+            )
+    try:
+        dequantized = _dequantize_tensor(
+            weight,
+            scales,
+            zeros,
+            original_dtype,
+            mode,
+            original_shape,
+        )
+    except RuntimeError as error:
+        raise ValueError(f"quantized layer {name!r} scale or zero shape is invalid") from error
+    if tuple(dequantized.shape) != original_shape:
+        raise ValueError(f"quantized layer {name!r} dequantized weight shape is invalid")
+
+
+def _expected_quantized_weight_dtype(
+    mode: QuantizationMode,
+    zeros: torch.Tensor | None,
+) -> torch.dtype:
+    if mode == QuantizationMode.INT8:
+        return torch.uint8 if zeros is not None else torch.int8
+    if mode in {QuantizationMode.INT4, QuantizationMode.NF4}:
+        return torch.uint8
+    if mode == QuantizationMode.FP8:
+        return torch.float8_e4m3fn
+    if mode == QuantizationMode.FP16:
+        return torch.float16
+    if mode == QuantizationMode.BF16:
+        return torch.bfloat16
+    raise ValueError(f"unsupported quantization mode: {mode}")
 
 
 def _load_original_dtype(layer_artifact: dict[str, Any], name: str) -> torch.dtype:

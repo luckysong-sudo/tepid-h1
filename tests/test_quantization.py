@@ -330,3 +330,47 @@ class TestLoadQuantizedModel:
 
         with pytest.raises(ValueError, match="weight shape"):
             load_quantized_model(path)
+
+    def test_load_rejects_corrupt_weight_dtype(self, tmp_path: Path) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        path = tmp_path / "model.pt"
+        artifact = save_quantized_model(model, quantize_model(model, cfg), path, config=cfg)
+        artifact["quantized_layers"][""]["weight"] = torch.zeros(4, 8)
+        torch.save(artifact, path)
+
+        with pytest.raises(ValueError, match="weight dtype"):
+            load_quantized_model(path)
+
+    def test_load_rejects_corrupt_scale_shape(self, tmp_path: Path) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        path = tmp_path / "model.pt"
+        artifact = save_quantized_model(model, quantize_model(model, cfg), path, config=cfg)
+        artifact["quantized_layers"][""]["scales"] = torch.ones(3)
+        torch.save(artifact, path)
+
+        with pytest.raises(ValueError, match="scale or zero shape"):
+            load_quantized_model(path)
+
+    def test_load_rejects_non_float_zeros(self, tmp_path: Path) -> None:
+        model = nn.Linear(8, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=False)
+        path = tmp_path / "model.pt"
+        artifact = save_quantized_model(model, quantize_model(model, cfg), path, config=cfg)
+        artifact["quantized_layers"][""]["zeros"] = torch.zeros(4, 1, dtype=torch.int32)
+        torch.save(artifact, path)
+
+        with pytest.raises(ValueError, match="zeros must be floating point"):
+            load_quantized_model(path)
+
+    def test_load_rejects_bias_dtype_mismatch(self, tmp_path: Path) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        path = tmp_path / "model.pt"
+        artifact = save_quantized_model(model, quantize_model(model, cfg), path, config=cfg)
+        artifact["quantized_layers"][""]["bias"] = torch.zeros(4, dtype=torch.float64)
+        torch.save(artifact, path)
+
+        with pytest.raises(ValueError, match="bias dtype"):
+            load_quantized_model(path)
