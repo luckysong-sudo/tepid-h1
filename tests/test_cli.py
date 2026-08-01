@@ -14,6 +14,7 @@ EXPECTED_SUBCOMMANDS = [
     "decontaminate",
     "delta-benchmark",
     "delta-validate",
+    "gpu-preflight",
     "moe-benchmark",
     "plan",
     "project-status",
@@ -73,6 +74,20 @@ class CLIParserTests(unittest.TestCase):
         parser = build_parser()
         args = parser.parse_args(["project-status"])
         self.assertEqual(args.command, "project-status")
+
+    def test_gpu_preflight_command(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "gpu-preflight",
+                "--nvidia-smi",
+                "C:/Program Files/NVIDIA Corporation/NVSMI/nvidia-smi.exe",
+            ]
+        )
+        self.assertEqual(args.command, "gpu-preflight")
+        self.assertEqual(args.nvidia_smi.name, "nvidia-smi.exe")
 
     def test_decontaminate_command(self):
         from tepid_h1.cli import build_parser

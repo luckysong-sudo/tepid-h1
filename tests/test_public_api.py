@@ -136,7 +136,9 @@ EXPECTED_SUBPACKAGE_APIS = {
         "write_retrieval_suite",
     ],
     tepid_h1.integrations: [
+        "LocalGPUPreflightConfig",
         "ZeroGPUJobConfig",
+        "build_local_gpu_preflight_report",
         "run_zero_gpu_job",
     ],
     tepid_h1.modeling: [

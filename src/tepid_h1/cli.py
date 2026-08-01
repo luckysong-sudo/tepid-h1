@@ -59,6 +59,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="print the current multi-dimensional project completion report",
     )
     project_status.add_argument("--report", type=Path)
+    gpu_preflight = subparsers.add_parser(
+        "gpu-preflight",
+        help="check whether the local host and active PyTorch runtime can use CUDA",
+    )
+    gpu_preflight.add_argument("--nvidia-smi", type=Path)
+    gpu_preflight.add_argument("--report", type=Path)
     decontamination = subparsers.add_parser(
         "decontaminate",
         help="compare training JSONL against a held-out benchmark JSONL",
@@ -311,6 +317,19 @@ def main() -> int:
     if args.command == "project-status":
         _write_payload(build_project_status_report().to_dict(), args.report)
         return 0
+    if args.command == "gpu-preflight":
+        from .integrations import (
+            LocalGPUPreflightConfig,
+            build_local_gpu_preflight_report,
+        )
+
+        gpu_report = build_local_gpu_preflight_report(
+            LocalGPUPreflightConfig(
+                nvidia_smi_path=str(args.nvidia_smi) if args.nvidia_smi else None
+            )
+        )
+        _write_payload(gpu_report, args.report)
+        return 0 if gpu_report["ready_for_cuda"] else 10
     if args.command == "decontaminate":
         decontamination_report = compare_corpora(
             load_text_records(args.training),

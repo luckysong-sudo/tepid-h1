@@ -110,14 +110,15 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="zerogpu_and_operations",
-        percent=70,
+        percent=72,
         evidence=(
             "ZeroGPU bundle, adapter limits and persisted evidence are documented",
             "remote quality gate path exists for bounded validation",
+            "local GPU preflight reports host GPU and PyTorch CUDA readiness",
         ),
         gaps=(
             "operations remain tied to Space quota and external Hugging Face state",
-            "latest remote quality report must be refreshed after current changes merge",
+            "local CUDA PyTorch runtime still needs enablement on this host",
         ),
     ),
     StatusDimension(

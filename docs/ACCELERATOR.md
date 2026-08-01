@@ -32,6 +32,20 @@ tepid-h1 compare-smoke \
 does not advertise BF16 support. CPU experiments currently require FP32; this avoids
 silently comparing materially different operator paths.
 
+Local GPU preflight:
+
+```bash
+tepid-h1 gpu-preflight \
+  --nvidia-smi "C:/Program Files/NVIDIA Corporation/NVSMI/nvidia-smi.exe" \
+  --report artifacts/local-gpu-preflight.json
+```
+
+The preflight report separates host GPU visibility from PyTorch CUDA readiness. On the
+current Windows host, `nvidia-smi` reports a GeForce MX150 with driver 388.73, while the
+active project environment reports `torch 2.13.0+cpu`, no CUDA runtime and
+`torch.cuda.is_available() == false`. That means the local GPU is visible to the OS but
+cannot yet execute Tepid-H1 CUDA paths from this virtual environment.
+
 CUDA timing synchronizes the device immediately before and after every measured training
 step. Input batches are transferred before timing. Reports identify the GPU, compute
 capability, CUDA runtime, total device memory and dtype, and include the maximum PyTorch
