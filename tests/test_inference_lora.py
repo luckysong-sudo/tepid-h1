@@ -216,6 +216,33 @@ class TestInferenceEngine:
         assert torch.equal(filtered[0, 1], logits[0, 1])
         assert torch.equal(filtered[0, 2], logits[0, 2])
 
+    def test_sample_applies_temperature_before_top_p_filtering(self, engine, monkeypatch):
+        logits = torch.tensor([[0.0, 1.0, 2.0]])
+        captured = {}
+
+        def fake_multinomial(probs, num_samples):
+            captured["probs"] = probs
+            return torch.tensor([[2]])
+
+        monkeypatch.setattr(torch, "multinomial", fake_multinomial)
+
+        sampled = engine._sample(
+            logits,
+            token_history=None,
+            temperature=0.1,
+            top_k=0,
+            top_p=0.75,
+            repetition_penalty=1.0,
+            pad_token_id=None,
+            eos_token_id=None,
+            do_sample=True,
+        )
+
+        assert torch.equal(sampled, torch.tensor([[2]]))
+        assert captured["probs"][0, 0] == 0.0
+        assert captured["probs"][0, 1] == 0.0
+        assert captured["probs"][0, 2] == 1.0
+
     def test_sampling_mode_uses_multinomial(self, engine):
         logits = torch.tensor([[0.0, 0.0, 10.0]])
 

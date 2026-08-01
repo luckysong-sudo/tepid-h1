@@ -280,7 +280,7 @@ class CLIIntegrationTests(unittest.TestCase):
                 "interpretation",
             },
         )
-        self.assertEqual(report["prototype_overall_percent"], 73)
+        self.assertEqual(report["prototype_overall_percent"], 74)
         self.assertEqual(report["formal_training_overall_percent"], 38)
         self.assertEqual(len(report["dimensions"]), 8)
         self.assertEqual(

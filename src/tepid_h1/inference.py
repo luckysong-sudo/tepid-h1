@@ -292,14 +292,14 @@ class InferenceEngine:
 
         logits = _suppress_pad_token(logits, pad_token_id, eos_token_id)
 
+        if temperature > 0.0:
+            logits = logits / temperature
+
         if top_k > 0:
             logits = _top_k_filter(logits, top_k)
 
         if 0.0 < top_p < 1.0:
             logits = _top_p_filter(logits, top_p)
-
-        if temperature > 0.0:
-            logits = logits / temperature
 
         if not do_sample:
             return logits.argmax(dim=-1, keepdim=True)
