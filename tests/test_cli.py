@@ -1,10 +1,42 @@
+import argparse
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
 
+EXPECTED_SUBCOMMANDS = [
+    "baseline-report",
+    "compare-smoke",
+    "corpus-compare",
+    "corpus-stats",
+    "data-audit",
+    "decontaminate",
+    "delta-validate",
+    "plan",
+    "project-status",
+    "retrieval-generate",
+    "retrieval-score",
+    "stage-gates",
+    "tokenizer-benchmark",
+    "train-smoke",
+]
+
+
+def _subcommands(parser: argparse.ArgumentParser) -> list[str]:
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return sorted(action.choices)
+    raise AssertionError("parser must define subcommands")
+
+
 class CLIParserTests(unittest.TestCase):
+    def test_subcommand_inventory_is_stable(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        self.assertEqual(_subcommands(parser), EXPECTED_SUBCOMMANDS)
+
     def test_plan_command(self):
         from tepid_h1.cli import build_parser
 
@@ -130,6 +162,7 @@ class CLIIntegrationTests(unittest.TestCase):
         self.assertIn("config", plan)
         self.assertIn("module_counts", plan)
         self.assertIn("layers", plan)
+        self.assertEqual(set(plan), {"config", "module_counts", "layers"})
         self.assertEqual(plan["config"]["vocab_size"], 4096)
         self.assertEqual(plan["config"]["num_layers"], 8)
 
@@ -154,8 +187,13 @@ class CLIIntegrationTests(unittest.TestCase):
                 output = mock_stdout.getvalue()
                 report = json.loads(output)
 
+        self.assertEqual(set(report), {"schema_version", "passed", "gates", "errors"})
         self.assertTrue(report["passed"])
         self.assertEqual(len(report["gates"]), 6)
+        self.assertEqual(
+            set(report["gates"][0]),
+            {"name", "deliverables", "exit_criteria"},
+        )
 
     def test_project_status_command_outputs_json(self):
         import sys
@@ -171,9 +209,24 @@ class CLIIntegrationTests(unittest.TestCase):
                 output = mock_stdout.getvalue()
                 report = json.loads(output)
 
+        self.assertEqual(
+            set(report),
+            {
+                "schema_version",
+                "prototype_scope",
+                "prototype_overall_percent",
+                "formal_training_overall_percent",
+                "dimensions",
+                "interpretation",
+            },
+        )
         self.assertEqual(report["prototype_overall_percent"], 68)
         self.assertEqual(report["formal_training_overall_percent"], 38)
         self.assertEqual(len(report["dimensions"]), 8)
+        self.assertEqual(
+            set(report["dimensions"][0]),
+            {"name", "percent", "evidence", "gaps"},
+        )
 
 
 if __name__ == "__main__":

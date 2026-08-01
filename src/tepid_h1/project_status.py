@@ -52,11 +52,12 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
         evidence=(
             "pytest, Ruff, flake8 and mypy are clean locally",
             "version metadata and tracked-artifact hygiene have regression tests",
+            "CLI command inventory and key JSON schemas have contract tests",
             "CI has blocking test, lint and type-check gates",
         ),
         gaps=(
             "CI matrix results still need to be observed after merge",
-            "module-level API and CLI JSON schemas are not yet snapshot-tested",
+            "module-level non-top-level APIs are not yet snapshot-tested",
         ),
     ),
     StatusDimension(

@@ -21,6 +21,7 @@ All notable changes to the Tepid-H1 project will be documented in this file.
 - Added machine-readable M0-M5 stage-gate auditing with CLI and tests.
 - Added machine-readable multi-dimensional project completion reporting.
 - Added top-level public API snapshot coverage.
+- Added CLI command inventory and JSON schema contract coverage.
 - Removed accidental local installer/null artifacts from the tracked tree.
 - Type annotation for `attn_bias` parameter in `model.py`
 - Removed redundant `num_kv_heads` parameter from `TepidH1CausalLM`
