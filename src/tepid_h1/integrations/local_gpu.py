@@ -22,6 +22,7 @@ def build_local_gpu_preflight_report(
     hardware_probe = _hardware_probe(nvidia_smi_path)
     torch_probe = _torch_probe()
     blockers = _blockers(hardware_probe, torch_probe)
+    recommended_actions = _recommended_actions(hardware_probe, torch_probe, blockers)
     return {
         "schema_version": 1,
         "experiment": "local_gpu_preflight",
@@ -30,6 +31,7 @@ def build_local_gpu_preflight_report(
         "torch": torch_probe,
         "ready_for_cuda": not blockers,
         "blockers": blockers,
+        "recommended_actions": recommended_actions,
         "interpretation": (
             "This preflight checks whether the local host can run Tepid-H1 CUDA paths. "
             "A visible NVIDIA GPU is not sufficient; the active Python environment must "
@@ -152,3 +154,28 @@ def _blockers(
         else:
             blockers.append("PyTorch CUDA runtime cannot enumerate a CUDA device")
     return blockers
+
+
+def _recommended_actions(
+    hardware_probe: dict[str, Any],
+    torch_probe: dict[str, Any],
+    blockers: list[str],
+) -> list[str]:
+    if not blockers:
+        return [
+            "run tepid-h1 delta-benchmark --device cuda with a target device label",
+            "run tepid-h1 moe-benchmark --device cuda to collect reference routing throughput",
+        ]
+
+    actions = []
+    if not hardware_probe["gpus"]:
+        actions.append("install or expose an NVIDIA driver so nvidia-smi reports the GPU")
+    if torch_probe["cuda_runtime"] is None:
+        actions.append("install a CUDA-enabled PyTorch build in the active virtual environment")
+    if not torch_probe["cuda_available"] and torch_probe["cuda_runtime"] is not None:
+        actions.append("align the NVIDIA driver with the CUDA runtime used by PyTorch")
+    if hardware_probe["gpus"] and torch_probe["cuda_runtime"] is None:
+        actions.append(
+            "rerun gpu-preflight before treating local benchmark results as CUDA evidence"
+        )
+    return actions

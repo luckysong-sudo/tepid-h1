@@ -26,6 +26,7 @@ All notable changes to the Tepid-H1 project will be documented in this file.
 - Added Delta backend benchmark matrix reporting.
 - Added MoE routing-load benchmark matrix reporting.
 - Added local GPU preflight reporting for host CUDA readiness.
+- Added local GPU evidence and preflight next-action reporting.
 - Removed accidental local installer/null artifacts from the tracked tree.
 - Type annotation for `attn_bias` parameter in `model.py`
 - Removed redundant `num_kv_heads` parameter from `TepidH1CausalLM`

@@ -38,6 +38,19 @@ class LocalGPUPreflightTests(unittest.TestCase):
         self.assertIn("nvidia-smi did not report", report["blockers"][0])
         self.assertEqual(report["hardware"]["gpus"], [])
         self.assertIn("cuda_available", report["torch"])
+        self.assertTrue(report["recommended_actions"])
+
+    def test_blockers_include_cuda_torch_action(self):
+        from tepid_h1.integrations.local_gpu import _recommended_actions
+
+        actions = _recommended_actions(
+            {"gpus": [{"name": "GeForce MX150"}]},
+            {"cuda_runtime": None, "cuda_available": False},
+            ["installed PyTorch build does not include CUDA"],
+        )
+
+        self.assertIn("CUDA-enabled PyTorch", " ".join(actions))
+        self.assertIn("rerun gpu-preflight", " ".join(actions))
 
 
 if __name__ == "__main__":
