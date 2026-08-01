@@ -41,6 +41,7 @@ class LocalGPUPreflightTests(unittest.TestCase):
         self.assertEqual(report["hardware"]["gpus"], [])
         self.assertIn("cuda_available", report["torch"])
         self.assertTrue(report["recommended_actions"])
+        self.assertEqual(report["validation_plan"][1]["status"], "blocked")
 
     def test_blockers_include_cuda_torch_action(self):
         from tepid_h1.integrations.local_gpu import _recommended_actions
@@ -64,6 +65,19 @@ class LocalGPUPreflightTests(unittest.TestCase):
         )
 
         self.assertIn("NVIDIA driver", " ".join(actions))
+
+    def test_validation_plan_marks_cuda_commands_ready_or_blocked(self):
+        from tepid_h1.integrations.local_gpu import _validation_plan
+
+        blocked = _validation_plan(ready_for_cuda=False)
+        ready = _validation_plan(ready_for_cuda=True)
+
+        self.assertEqual([step["name"] for step in blocked], [step["name"] for step in ready])
+        self.assertEqual(blocked[0]["status"], "blocked")
+        self.assertEqual(blocked[1]["status"], "blocked")
+        self.assertEqual(ready[0]["status"], "passed")
+        self.assertEqual(ready[1]["status"], "ready")
+        self.assertIn("--device cuda", ready[1]["command"])
 
 
 if __name__ == "__main__":

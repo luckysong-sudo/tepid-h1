@@ -116,6 +116,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "ZeroGPU bundle, adapter limits and persisted evidence are documented",
             "remote quality gate path exists for bounded validation",
             "local GPU preflight reports host GPU, PyTorch CUDA readiness and next actions",
+            "local GPU validation plan enumerates CUDA benchmark commands after enablement",
         ),
         gaps=(
             "operations remain tied to Space quota and external Hugging Face state",

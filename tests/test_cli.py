@@ -298,6 +298,7 @@ class CLIIntegrationTests(unittest.TestCase):
             "ready_for_cuda": False,
             "blockers": ["installed PyTorch build does not include CUDA"],
             "recommended_actions": ["install a CUDA-enabled PyTorch build"],
+            "validation_plan": [{"name": "delta_cuda_benchmark", "status": "blocked"}],
             "interpretation": "not ready",
         }
         with patch.object(sys, "argv", ["tepid-h1", "gpu-preflight"]):
@@ -321,6 +322,7 @@ class CLIIntegrationTests(unittest.TestCase):
                 "ready_for_cuda",
                 "blockers",
                 "recommended_actions",
+                "validation_plan",
                 "interpretation",
             },
         )
@@ -343,6 +345,7 @@ class CLIIntegrationTests(unittest.TestCase):
             "ready_for_cuda": True,
             "blockers": [],
             "recommended_actions": ["run tepid-h1 delta-benchmark --device cuda"],
+            "validation_plan": [{"name": "delta_cuda_benchmark", "status": "ready"}],
             "interpretation": "ready",
         }
         with patch.object(sys, "argv", ["tepid-h1", "gpu-preflight"]):

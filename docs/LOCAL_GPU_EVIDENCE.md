@@ -42,3 +42,30 @@ Required next actions:
 - Rerun `tepid-h1 gpu-preflight` before treating `delta-benchmark --device cuda`,
   `moe-benchmark --device cuda`, or `compare-smoke --device cuda` results as local CUDA
   evidence.
+
+Post-enablement validation commands:
+
+```bash
+tepid-h1 delta-benchmark \
+  --device cuda \
+  --dtype float32 \
+  --target-device-label local-gpu \
+  --length 4 \
+  --length 8 \
+  --iterations 3
+
+tepid-h1 moe-benchmark \
+  --device cuda \
+  --dtype float32 \
+  --length 4 \
+  --length 8 \
+  --iterations 3
+
+tepid-h1 compare-smoke \
+  --steps 1 \
+  --trials 1 \
+  --device cuda \
+  --dtype float32 \
+  --corpus configs/paired_corpus.example.jsonl \
+  --inventory configs/data_inventory.example.json
+```

@@ -25,6 +25,7 @@ def build_local_gpu_preflight_report(
     torch_probe = _torch_probe()
     blockers = _blockers(hardware_probe, torch_probe)
     recommended_actions = _recommended_actions(hardware_probe, torch_probe, blockers)
+    validation_plan = _validation_plan(ready_for_cuda=not blockers)
     return {
         "schema_version": 1,
         "experiment": "local_gpu_preflight",
@@ -34,6 +35,7 @@ def build_local_gpu_preflight_report(
         "ready_for_cuda": not blockers,
         "blockers": blockers,
         "recommended_actions": recommended_actions,
+        "validation_plan": validation_plan,
         "interpretation": (
             "This preflight checks whether the local host can run Tepid-H1 CUDA paths. "
             "A visible NVIDIA GPU is not sufficient; the active Python environment must "
@@ -199,3 +201,43 @@ def _recommended_actions(
             "rerun gpu-preflight before treating local benchmark results as CUDA evidence"
         )
     return actions
+
+
+def _validation_plan(*, ready_for_cuda: bool) -> list[dict[str, str]]:
+    cuda_status = "ready" if ready_for_cuda else "blocked"
+    return [
+        {
+            "name": "local_gpu_preflight",
+            "status": "passed" if ready_for_cuda else "blocked",
+            "command": "tepid-h1 gpu-preflight",
+            "purpose": "confirm host GPU visibility and PyTorch CUDA readiness",
+        },
+        {
+            "name": "delta_cuda_benchmark",
+            "status": cuda_status,
+            "command": (
+                "tepid-h1 delta-benchmark --device cuda --dtype float32 "
+                "--target-device-label local-gpu --length 4 --length 8 --iterations 3"
+            ),
+            "purpose": "collect CUDA Delta numerical and shape-level throughput evidence",
+        },
+        {
+            "name": "moe_cuda_benchmark",
+            "status": cuda_status,
+            "command": (
+                "tepid-h1 moe-benchmark --device cuda --dtype float32 "
+                "--length 4 --length 8 --iterations 3"
+            ),
+            "purpose": "collect CUDA reference MoE routing-load throughput evidence",
+        },
+        {
+            "name": "paired_cuda_smoke",
+            "status": cuda_status,
+            "command": (
+                "tepid-h1 compare-smoke --steps 1 --trials 1 --device cuda "
+                "--dtype float32 --corpus configs/paired_corpus.example.jsonl "
+                "--inventory configs/data_inventory.example.json"
+            ),
+            "purpose": "verify end-to-end governed CUDA measurement plumbing",
+        },
+    ]
