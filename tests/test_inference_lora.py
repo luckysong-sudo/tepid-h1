@@ -12,6 +12,7 @@ from tepid_h1.inference import (
     InferenceEngine,
     _apply_finished_sequence_mask,
     _apply_repetition_penalty,
+    _prepare_generation_input_ids,
     _resolve_generation_execution,
     _suppress_pad_token,
     _top_k_filter,
@@ -179,6 +180,25 @@ class TestInferenceEngine:
                     eos_token_id=-1,
                 ),
             )
+
+    def test_generation_prepares_1d_prompt_as_single_batch(self):
+        prepared = _prepare_generation_input_ids(torch.tensor([1, 2, 3]), vocab_size=8)
+
+        assert torch.equal(prepared, torch.tensor([[1, 2, 3]]))
+
+    def test_generation_rejects_invalid_prompt_shape_dtype_and_range(self):
+        with pytest.raises(TypeError, match="torch.Tensor"):
+            _prepare_generation_input_ids([1, 2], vocab_size=8)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="shape"):
+            _prepare_generation_input_ids(torch.ones(1, 1, 1, dtype=torch.long), vocab_size=8)
+        with pytest.raises(ValueError, match="batch size"):
+            _prepare_generation_input_ids(torch.empty(0, 1, dtype=torch.long), vocab_size=8)
+        with pytest.raises(ValueError, match="sequence length"):
+            _prepare_generation_input_ids(torch.empty(1, 0, dtype=torch.long), vocab_size=8)
+        with pytest.raises(TypeError, match="torch.long"):
+            _prepare_generation_input_ids(torch.ones(1, 2), vocab_size=8)
+        with pytest.raises(ValueError, match=r"\[0, 8\)"):
+            _prepare_generation_input_ids(torch.tensor([[0, 8]], dtype=torch.long), vocab_size=8)
 
     def test_generation_special_token_ids_must_be_integers(self):
         with pytest.raises(TypeError, match="eos_token_id"):

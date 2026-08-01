@@ -122,9 +122,9 @@ class InferenceEngine:
         _validate_generation_token_ids(effective_config, self._config.vocab_size)
         device, dtype = _resolve_generation_execution(effective_config)
         self.model = self.model.to(device=device, dtype=dtype)
-        input_ids = input_ids.to(device=device)
-        if input_ids.ndim == 1:
-            input_ids = input_ids.unsqueeze(0)
+        input_ids = _prepare_generation_input_ids(input_ids, self._config.vocab_size).to(
+            device=device
+        )
 
         batch_size = input_ids.shape[0]
         original_length = input_ids.shape[1]
@@ -298,6 +298,24 @@ def _merge_generation_config(
     payload = {field: getattr(base, field) for field in fields}
     payload.update(overrides)
     return GenerateConfig(**payload)
+
+
+def _prepare_generation_input_ids(input_ids: Tensor, vocab_size: int) -> Tensor:
+    if not isinstance(input_ids, torch.Tensor):
+        raise TypeError("input_ids must be a torch.Tensor")
+    if input_ids.ndim == 1:
+        input_ids = input_ids.unsqueeze(0)
+    elif input_ids.ndim != 2:
+        raise ValueError("input_ids must have shape [batch, sequence]")
+    if input_ids.shape[0] <= 0:
+        raise ValueError("input_ids batch size must be positive")
+    if input_ids.shape[1] <= 0:
+        raise ValueError("input_ids sequence length must be positive")
+    if input_ids.dtype != torch.long:
+        raise TypeError("input_ids must use torch.long dtype")
+    if int(input_ids.min().item()) < 0 or int(input_ids.max().item()) >= vocab_size:
+        raise ValueError(f"input_ids must contain token ids in [0, {vocab_size})")
+    return input_ids
 
 
 def _apply_repetition_penalty(
