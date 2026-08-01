@@ -11,6 +11,9 @@ import torch
 import torch.nn as nn
 
 
+_SUPPORTED_EXPORT_FORMATS = frozenset({"torchscript", "onnx", "safetensors"})
+
+
 class ModelExporter:
     """Exports models to various formats for deployment."""
 
@@ -128,13 +131,12 @@ class ModelExporter:
         Returns:
             Dictionary mapping format names to output paths.
         """
-        if formats is None:
-            formats = ["torchscript", "onnx", "safetensors"]
+        export_formats = _normalize_export_formats(formats)
 
         output_dir.mkdir(parents=True, exist_ok=True)
         exports: dict[str, Path] = {}
 
-        for fmt in formats:
+        for fmt in export_formats:
             if fmt == "torchscript":
                 exports["torchscript"] = self.export_torchscript(output_dir / "model.pt")
             elif fmt == "onnx":
@@ -158,3 +160,17 @@ class ModelExporter:
             "num_kv_heads": self.config.num_kv_heads,
             "head_dim": self.config.head_dim,
         }
+
+
+def _normalize_export_formats(formats: list[str] | None) -> list[str]:
+    requested = formats or ["torchscript", "onnx", "safetensors"]
+    normalized: list[str] = []
+    for fmt in requested:
+        if not isinstance(fmt, str):
+            raise ValueError("export formats must be strings")
+        if fmt not in _SUPPORTED_EXPORT_FORMATS:
+            supported = ", ".join(sorted(_SUPPORTED_EXPORT_FORMATS))
+            raise ValueError(f"unsupported export format {fmt!r}; supported formats: {supported}")
+        if fmt not in normalized:
+            normalized.append(fmt)
+    return normalized

@@ -87,6 +87,33 @@ class TestModelExporter:
         assert "onnx" in exports
         assert "safetensors" in exports
 
+    def test_export_for_inference_rejects_unknown_format(
+        self, exporter: ModelExporter, tmp_path: Path
+    ) -> None:
+        with pytest.raises(ValueError, match="unsupported export format"):
+            exporter.export_for_inference(tmp_path / "exported", formats=["safetensors", "gguf"])
+
+    def test_export_for_inference_rejects_non_string_format(
+        self, exporter: ModelExporter, tmp_path: Path
+    ) -> None:
+        with pytest.raises(ValueError, match="formats must be strings"):
+            exporter.export_for_inference(
+                tmp_path / "exported",
+                formats=["safetensors", 1],  # type: ignore[list-item]
+            )
+
+    def test_export_for_inference_deduplicates_formats(
+        self, exporter: ModelExporter, tmp_path: Path
+    ) -> None:
+        output_dir = tmp_path / "exported"
+        exports = exporter.export_for_inference(
+            output_dir,
+            formats=["safetensors", "safetensors"],
+        )
+
+        assert list(exports) == ["safetensors"]
+        assert exports["safetensors"].exists()
+
     def test_get_export_config(self, exporter: ModelExporter) -> None:
         config = exporter.get_export_config()
         assert "vocab_size" in config
