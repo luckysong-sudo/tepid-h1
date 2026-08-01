@@ -27,6 +27,7 @@ Agent Runtime、ZeroGPU 适配和 CI 验证。
 - Hugging Face ZeroGPU bundle、远端质量门和持久化报告证据。
 - GitHub Actions、pre-commit、Ruff、flake8 和 mypy 阻塞检查。
 - 多维度项目完善度报告，可通过 `tepid-h1 project-status` 输出。
+- 顶层 public API 快照测试，防止无意破坏导出面。
 
 ## 当前限制
 
@@ -68,7 +69,7 @@ Agent Runtime、ZeroGPU 适配和 CI 验证。
 - 为 CLI 子命令补充端到端示例和最小输入 fixture。
 - 为 Agent Runtime 增加更清晰的失败原因和审计事件说明。
 - 完善导出、推理、LoRA、量化模块的 README 级使用路径。
-- 为长期接口稳定性增加 public API 快照测试。
+- 为长期接口稳定性扩展模块级 API 和 CLI 输出 schema 快照。
 
 ## 近期可执行项
 

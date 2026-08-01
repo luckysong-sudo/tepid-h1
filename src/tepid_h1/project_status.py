@@ -56,7 +56,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
         ),
         gaps=(
             "CI matrix results still need to be observed after merge",
-            "public API compatibility is not yet snapshot-tested",
+            "module-level API and CLI JSON schemas are not yet snapshot-tested",
         ),
     ),
     StatusDimension(
@@ -133,10 +133,11 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="documentation_and_release_readiness",
-        percent=68,
+        percent=70,
         evidence=(
             "architecture, training, governance, retrieval and roadmap docs exist",
             "stage-gate and project-hygiene checks are now machine-readable",
+            "top-level public API exports are protected by a snapshot test",
         ),
         gaps=(
             "API reference documentation is still incomplete",
