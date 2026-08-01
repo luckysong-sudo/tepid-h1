@@ -12,6 +12,7 @@ EXPECTED_SUBCOMMANDS = [
     "corpus-stats",
     "data-audit",
     "decontaminate",
+    "delta-benchmark",
     "delta-validate",
     "plan",
     "project-status",
@@ -143,6 +144,23 @@ class CLIParserTests(unittest.TestCase):
         self.assertEqual(args.steps, 1)
         self.assertEqual(args.device, "cpu")
 
+    def test_delta_benchmark_command(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "delta-benchmark",
+                "--length",
+                "2",
+                "--iterations",
+                "1",
+            ]
+        )
+        self.assertEqual(args.command, "delta-benchmark")
+        self.assertEqual(args.sequence_lengths, [2])
+        self.assertEqual(args.iterations, 1)
+
 
 class CLIIntegrationTests(unittest.TestCase):
     def test_plan_command_outputs_json(self):
@@ -220,7 +238,7 @@ class CLIIntegrationTests(unittest.TestCase):
                 "interpretation",
             },
         )
-        self.assertEqual(report["prototype_overall_percent"], 68)
+        self.assertEqual(report["prototype_overall_percent"], 69)
         self.assertEqual(report["formal_training_overall_percent"], 38)
         self.assertEqual(len(report["dimensions"]), 8)
         self.assertEqual(

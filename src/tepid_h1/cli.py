@@ -178,6 +178,28 @@ def build_parser() -> argparse.ArgumentParser:
     comparison.add_argument("--corpus", type=Path)
     comparison.add_argument("--inventory", type=Path)
     comparison.add_argument("--report", type=Path)
+    delta_benchmark = subparsers.add_parser(
+        "delta-benchmark",
+        help="benchmark Delta reference and candidate throughput across sequence lengths",
+    )
+    delta_benchmark.add_argument("--backend", choices=("eager", "inductor"), default="eager")
+    delta_benchmark.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    delta_benchmark.add_argument(
+        "--dtype",
+        choices=("float32", "bfloat16", "float16"),
+        default="float32",
+    )
+    delta_benchmark.add_argument("--batch-size", type=int, default=1)
+    delta_benchmark.add_argument(
+        "--length",
+        type=int,
+        action="append",
+        dest="sequence_lengths",
+    )
+    delta_benchmark.add_argument("--iterations", type=int, default=3)
+    delta_benchmark.add_argument("--seed", type=int, default=71)
+    delta_benchmark.add_argument("--target-device-label")
+    delta_benchmark.add_argument("--report", type=Path)
     corpus_stats = subparsers.add_parser(
         "corpus-stats",
         help="summarize a governed paired-corpus JSONL file",
@@ -615,6 +637,26 @@ def main() -> int:
         payload["generated_at"] = datetime.now(timezone.utc).isoformat()
         _write_payload(payload, args.report)
         return 0 if payload["numerical_passed"] else 5
+    if args.command == "delta-benchmark":
+        from .evaluation.delta_backend import (
+            DeltaBackendBenchmarkConfig,
+            benchmark_delta_backend,
+        )
+
+        benchmark_payload = benchmark_delta_backend(
+            DeltaBackendBenchmarkConfig(
+                backend=args.backend,
+                device=args.device,
+                dtype=args.dtype,
+                batch_size=args.batch_size,
+                sequence_lengths=tuple(args.sequence_lengths or (4, 8, 16)),
+                iterations=args.iterations,
+                seed=args.seed,
+                target_device_label=args.target_device_label,
+            )
+        )
+        _write_payload(benchmark_payload, args.report)
+        return 0 if benchmark_payload["summary"]["all_numerical_passed"] else 9
     if args.command == "compare-smoke":
         from .experiments import (
             PairedExperimentConfig,

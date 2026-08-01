@@ -96,9 +96,10 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="backend_performance",
-        percent=35,
+        percent=38,
         evidence=(
             "Delta backend validation compares forward, state and gradients",
+            "Delta benchmark matrix reports shape-level throughput and qualification status",
             "eager Delta and native GQA reduce some reference overhead",
         ),
         gaps=(

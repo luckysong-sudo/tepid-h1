@@ -42,6 +42,85 @@ class DeltaBackendValidationConfig:
             raise ValueError("target_device_label must be non-empty when provided")
 
 
+@dataclass(frozen=True)
+class DeltaBackendBenchmarkConfig:
+    backend: str = "eager"
+    device: str = "cpu"
+    dtype: str = "float32"
+    batch_size: int = 1
+    sequence_lengths: tuple[int, ...] = (4, 8, 16)
+    iterations: int = 3
+    seed: int = 71
+    target_device_label: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.sequence_lengths:
+            raise ValueError("sequence_lengths must not be empty")
+        for sequence_length in self.sequence_lengths:
+            if not 2 <= sequence_length <= 64:
+                raise ValueError("sequence_lengths must be between 2 and 64")
+        DeltaBackendValidationConfig(
+            backend=self.backend,
+            device=self.device,
+            dtype=self.dtype,
+            batch_size=self.batch_size,
+            sequence_length=self.sequence_lengths[0],
+            iterations=self.iterations,
+            seed=self.seed,
+            target_device_label=self.target_device_label,
+        )
+
+
+def benchmark_delta_backend(config: DeltaBackendBenchmarkConfig) -> dict[str, Any]:
+    cases: list[dict[str, Any]] = []
+    for index, sequence_length in enumerate(config.sequence_lengths):
+        case_report = validate_delta_backend(
+            DeltaBackendValidationConfig(
+                backend=config.backend,
+                device=config.device,
+                dtype=config.dtype,
+                batch_size=config.batch_size,
+                sequence_length=sequence_length,
+                iterations=config.iterations,
+                seed=config.seed + index,
+                target_device_label=config.target_device_label,
+            )
+        )
+        cases.append(
+            {
+                "sequence_length": sequence_length,
+                "tokens": case_report["timing"]["tokens"],
+                "numerical_passed": case_report["numerical_passed"],
+                "optimization_qualified": case_report["qualification"]["optimization_qualified"],
+                "candidate_over_reference_speedup": case_report["timing"][
+                    "candidate_over_reference_speedup"
+                ],
+                "reference_tokens_per_second": case_report["timing"]["reference_tokens_per_second"],
+                "candidate_tokens_per_second": case_report["timing"]["candidate_tokens_per_second"],
+                "qualification_reason": case_report["qualification"]["reason"],
+            }
+        )
+    speedups = [case["candidate_over_reference_speedup"] for case in cases]
+    return {
+        "schema_version": 1,
+        "experiment": "delta_backend_benchmark_matrix",
+        "config": asdict(config),
+        "cases": cases,
+        "summary": {
+            "case_count": len(cases),
+            "all_numerical_passed": all(case["numerical_passed"] for case in cases),
+            "all_optimization_qualified": all(case["optimization_qualified"] for case in cases),
+            "min_candidate_over_reference_speedup": min(speedups),
+            "max_candidate_over_reference_speedup": max(speedups),
+        },
+        "interpretation": (
+            "This matrix is a repeatable benchmark fixture. It records local throughput "
+            "signals across shapes but does not qualify an optimized backend unless each "
+            "case also satisfies the target-hardware qualification contract."
+        ),
+    }
+
+
 def validate_delta_backend(config: DeltaBackendValidationConfig) -> dict[str, Any]:
     device, dtype = _resolve_device(config)
     tolerance = _tolerance(dtype)

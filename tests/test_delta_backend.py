@@ -42,6 +42,40 @@ class DeltaBackendValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "target_device_label"):
             DeltaBackendValidationConfig(target_device_label=" ")
 
+    def test_benchmark_matrix_reports_shape_level_timing(self):
+        from tepid_h1.evaluation.delta_backend import (
+            DeltaBackendBenchmarkConfig,
+            benchmark_delta_backend,
+        )
+
+        report = benchmark_delta_backend(
+            DeltaBackendBenchmarkConfig(
+                sequence_lengths=(2, 3),
+                iterations=1,
+                seed=83,
+            )
+        )
+
+        self.assertEqual(report["schema_version"], 1)
+        self.assertEqual(report["experiment"], "delta_backend_benchmark_matrix")
+        self.assertEqual(report["summary"]["case_count"], 2)
+        self.assertTrue(report["summary"]["all_numerical_passed"])
+        self.assertFalse(report["summary"]["all_optimization_qualified"])
+        self.assertEqual([case["sequence_length"] for case in report["cases"]], [2, 3])
+        for case in report["cases"]:
+            self.assertGreater(case["tokens"], 0)
+            self.assertGreater(case["reference_tokens_per_second"], 0)
+            self.assertGreater(case["candidate_tokens_per_second"], 0)
+            self.assertIn("not declared", case["qualification_reason"])
+
+    def test_invalid_benchmark_config_is_rejected(self):
+        from tepid_h1.evaluation.delta_backend import DeltaBackendBenchmarkConfig
+
+        with self.assertRaisesRegex(ValueError, "sequence_lengths"):
+            DeltaBackendBenchmarkConfig(sequence_lengths=())
+        with self.assertRaisesRegex(ValueError, "sequence_lengths"):
+            DeltaBackendBenchmarkConfig(sequence_lengths=(1,))
+
 
 if __name__ == "__main__":
     unittest.main()

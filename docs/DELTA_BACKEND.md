@@ -35,11 +35,30 @@ tepid-h1 delta-validate \
   --report artifacts/delta-cuda-inductor.json
 ```
 
+Shape-level benchmark matrix:
+
+```bash
+tepid-h1 delta-benchmark \
+  --backend eager \
+  --device cpu \
+  --dtype float32 \
+  --length 4 \
+  --length 8 \
+  --length 16 \
+  --iterations 3 \
+  --report artifacts/delta-benchmark-matrix.json
+```
+
 The report separates `numerical_passed` from `optimization_qualified`. The latter becomes
 true only when all numerical comparisons pass, the candidate uses Inductor on CUDA, a
 target-device label is explicitly declared, and measured candidate throughput exceeds the
 reference. CPU or eager runs can validate the compiler boundary but cannot claim an
 optimized backend.
+
+The benchmark matrix reuses the same numerical qualification path for each sequence
+length and records per-shape throughput, speedup and qualification status. It is intended
+as a stable fixture for comparing future Triton, CUDA or Inductor candidates without
+turning local CPU timing into target-hardware evidence.
 
 The current candidate compiles `GatedDeltaMemoryEager`, while
 `GatedDeltaMemoryReference` remains the independent oracle. The eager candidate preserves

@@ -122,11 +122,15 @@ EXPECTED_SUBPACKAGE_APIS = {
         "summarize_paired_corpus",
     ],
     tepid_h1.evaluation: [
+        "DeltaBackendBenchmarkConfig",
+        "DeltaBackendValidationConfig",
         "RetrievalCase",
+        "benchmark_delta_backend",
         "generate_retrieval_suite",
         "load_answer_key",
         "load_predictions",
         "score_retrieval",
+        "validate_delta_backend",
         "write_retrieval_suite",
     ],
     tepid_h1.integrations: [
