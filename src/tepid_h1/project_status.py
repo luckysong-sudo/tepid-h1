@@ -209,6 +209,8 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "top-level and subpackage public API exports are protected by snapshot tests",
             "public API reference documents the stable top-level and subpackage exports",
             "inference export rejects unsupported formats instead of silently skipping them",
+            "inference export rejects empty format lists before creating output directories",
+            "ONNX export validates dummy input shape before invoking the exporter",
             "export metadata cannot override model configuration keys",
             "SafeTensors export writes a real safetensors file instead of a torch pickle",
         ),

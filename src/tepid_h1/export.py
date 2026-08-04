@@ -65,10 +65,11 @@ class ModelExporter:
         Returns:
             Path to the exported model.
         """
+        validated_input_shape = _validate_onnx_input_shape(input_shape)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.model.eval()
-        dummy_input = torch.randint(0, self.config.vocab_size, input_shape)
+        dummy_input = torch.randint(0, self.config.vocab_size, validated_input_shape)
 
         torch.onnx.export(
             self.model,
@@ -163,7 +164,15 @@ class ModelExporter:
 
 
 def _normalize_export_formats(formats: list[str] | None) -> list[str]:
-    requested = formats or ["torchscript", "onnx", "safetensors"]
+    if formats is None:
+        requested = ["torchscript", "onnx", "safetensors"]
+    else:
+        if not isinstance(formats, list):
+            raise ValueError("export formats must be a list")
+        if not formats:
+            raise ValueError("export formats must not be empty")
+        requested = formats
+
     normalized: list[str] = []
     for fmt in requested:
         if not isinstance(fmt, str):
@@ -174,6 +183,20 @@ def _normalize_export_formats(formats: list[str] | None) -> list[str]:
         if fmt not in normalized:
             normalized.append(fmt)
     return normalized
+
+
+def _validate_onnx_input_shape(input_shape: tuple[int, ...]) -> tuple[int, int]:
+    if not isinstance(input_shape, tuple) or len(input_shape) != 2:
+        raise ValueError("input_shape must be a tuple of (batch_size, sequence_length)")
+
+    batch_size, sequence_length = input_shape
+    for name, value in (("batch_size", batch_size), ("sequence_length", sequence_length)):
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(f"input_shape {name} must be an integer")
+        if value <= 0:
+            raise ValueError(f"input_shape {name} must be positive")
+
+    return batch_size, sequence_length
 
 
 def _export_config_payload(config: Any) -> dict[str, Any]:

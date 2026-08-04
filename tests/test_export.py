@@ -132,6 +132,25 @@ class TestModelExporter:
                 formats=["safetensors", 1],  # type: ignore[list-item]
             )
 
+    def test_export_for_inference_rejects_non_list_formats(
+        self, exporter: ModelExporter, tmp_path: Path
+    ) -> None:
+        with pytest.raises(ValueError, match="formats must be a list"):
+            exporter.export_for_inference(
+                tmp_path / "exported",
+                formats=("safetensors",),  # type: ignore[arg-type]
+            )
+
+    def test_export_for_inference_rejects_empty_formats(
+        self, exporter: ModelExporter, tmp_path: Path
+    ) -> None:
+        output_dir = tmp_path / "exported"
+
+        with pytest.raises(ValueError, match="formats must not be empty"):
+            exporter.export_for_inference(output_dir, formats=[])
+
+        assert not output_dir.exists()
+
     def test_export_for_inference_deduplicates_formats(
         self, exporter: ModelExporter, tmp_path: Path
     ) -> None:
@@ -166,6 +185,33 @@ class TestModelExporter:
         output_path = tmp_path / "model.onnx"
         exporter.export_onnx(output_path)
         assert not exporter.model.training
+
+    @pytest.mark.parametrize(
+        "input_shape, expected_error",
+        [
+            ((1,), "tuple of"),
+            ((1, 0), "sequence_length must be positive"),
+            ((True, 8), "batch_size must be an integer"),
+        ],
+    )
+    def test_onnx_rejects_invalid_input_shape_before_export(
+        self,
+        exporter: ModelExporter,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        input_shape: tuple[int, ...],
+        expected_error: str,
+    ) -> None:
+        def fail_export(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("torch.onnx.export should not run for invalid input_shape")
+
+        monkeypatch.setattr(torch.onnx, "export", fail_export)
+        output_path = tmp_path / "nested" / "model.onnx"
+
+        with pytest.raises(ValueError, match=expected_error):
+            exporter.export_onnx(output_path, input_shape=input_shape)
+
+        assert not output_path.parent.exists()
 
     @pytest.mark.skip(reason="TorchScript not supported for keyword-only args in Python 3.14+")
     def test_export_directory_creation(self, exporter: ModelExporter, tmp_path: Path) -> None:
