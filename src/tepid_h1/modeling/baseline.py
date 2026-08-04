@@ -9,7 +9,7 @@ from torch import Tensor, nn
 from tepid_h1.config import TepidH1Config
 
 from .layers import AttentionState, GQAAttentionNative, RMSNorm, SwiGLU
-from .model import TepidH1Output, _causal_lm_loss
+from .model import TepidH1Output, _causal_lm_loss, _validate_input_ids
 
 
 @dataclass(frozen=True)
@@ -155,8 +155,7 @@ class TransformerBaselineModel(nn.Module):
         *,
         attention_states: tuple[AttentionState, ...] | None = None,
     ) -> TepidH1Output:
-        if input_ids.ndim != 2:
-            raise ValueError("input_ids must have shape [batch, sequence]")
+        _validate_input_ids(input_ids, self.config.vocab_size)
         provided_states = iter(attention_states or ())
         x = self.token_embeddings(input_ids)
         next_states: list[AttentionState] = []

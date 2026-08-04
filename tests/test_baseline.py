@@ -61,6 +61,34 @@ class BaselineModelTests(unittest.TestCase):
         torch.testing.assert_close(output.loss, output.language_model_loss)
         self.assertGreater(metrics.gradient_norm, 0)
 
+    def test_baseline_rejects_invalid_input_dtype(self):
+        from tepid_h1.modeling import TransformerBaselineCausalLM
+
+        config = TransformerBaselineConfig.active_parameter_matched(TepidH1Config.smoke())
+        model = TransformerBaselineCausalLM(config)
+
+        with self.assertRaisesRegex(TypeError, "torch.long"):
+            model(torch.ones((1, 4), dtype=torch.float32))
+
+    def test_baseline_rejects_out_of_range_token_ids(self):
+        from tepid_h1.modeling import TransformerBaselineCausalLM
+
+        config = TransformerBaselineConfig.active_parameter_matched(TepidH1Config.smoke())
+        model = TransformerBaselineCausalLM(config)
+        bad_input = torch.tensor([[0, config.model.vocab_size]], dtype=torch.long)
+
+        with self.assertRaisesRegex(ValueError, "token ids"):
+            model(bad_input)
+
+    def test_baseline_rejects_empty_sequence(self):
+        from tepid_h1.modeling import TransformerBaselineCausalLM
+
+        config = TransformerBaselineConfig.active_parameter_matched(TepidH1Config.smoke())
+        model = TransformerBaselineCausalLM(config)
+
+        with self.assertRaisesRegex(ValueError, "sequence length"):
+            model(torch.empty((1, 0), dtype=torch.long))
+
     def test_baseline_chunked_forward_matches_single_pass(self):
         from tepid_h1.modeling import TransformerBaselineCausalLM
 
