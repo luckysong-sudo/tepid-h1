@@ -25,6 +25,32 @@ class AttentionCacheTests(unittest.TestCase):
         torch.testing.assert_close(restored.k_cache, key)
         torch.testing.assert_close(restored.v_cache, value)
 
+    def test_update_rejects_non_3d_updates_without_mutation(self):
+        from tepid_h1.modeling.cache import AttentionCache
+
+        cache = AttentionCache()
+
+        with self.assertRaisesRegex(ValueError, "3D"):
+            cache.update(torch.randn(2), torch.randn(2))
+
+        self.assertTrue(cache.is_empty)
+        self.assertEqual(cache.seq_len, 0)
+
+    def test_update_rejects_bad_update_before_mutating_existing_cache(self):
+        from tepid_h1.modeling.cache import AttentionCache
+
+        cache = AttentionCache()
+        key = torch.randn(1, 2, 3)
+        value = torch.randn(1, 2, 3)
+        cache.update(key, value)
+
+        with self.assertRaisesRegex(ValueError, "3D"):
+            cache.update(torch.randn(1, 3), torch.randn(1, 3))
+
+        self.assertEqual(cache.seq_len, 2)
+        torch.testing.assert_close(cache.k_cache, key)
+        torch.testing.assert_close(cache.v_cache, value)
+
     def test_load_state_rejects_unpaired_cache_tensors_without_mutation(self):
         from tepid_h1.modeling.cache import AttentionCache
 

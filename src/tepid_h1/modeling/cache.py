@@ -54,10 +54,7 @@ class AttentionCache:
         *,
         cache_length: int | None = None,
     ) -> tuple[Tensor, Tensor]:
-        if k_new.shape[-2] != v_new.shape[-2]:
-            raise ValueError("key and value sequences must have equal length")
-        if k_new.ndim != 3:
-            raise ValueError(f"expected 3D tensors, got {k_new.ndim}D")
+        _validate_update_tensors(k_new, v_new)
         if k_new.shape[0] != v_new.shape[0]:
             raise ValueError("batch dimensions must match")
         if k_new.dtype != v_new.dtype:
@@ -163,6 +160,13 @@ def _validate_cache_tensors(
         raise ValueError("cached key and value dtypes must match")
     if k_cache.dtype != expected_dtype:
         raise ValueError("attention cache dtype must match cached tensors")
+
+
+def _validate_update_tensors(k_new: Tensor, v_new: Tensor) -> None:
+    if k_new.ndim != 3 or v_new.ndim != 3:
+        raise ValueError("key and value updates must be 3D tensors")
+    if k_new.shape[-2] != v_new.shape[-2]:
+        raise ValueError("key and value sequences must have equal length")
 
 
 def _resolve_cache_device(value: Any) -> torch.device:
