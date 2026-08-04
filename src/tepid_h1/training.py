@@ -274,7 +274,7 @@ def load_checkpoint(
         raise TypeError("checkpoint rng_state must be a tensor")
 
     model.load_state_dict(model_state, strict=True)
-    if optimizer is not None:
+    if optimizer is not None and optimizer_state is not None:
         optimizer.load_state_dict(optimizer_state)
     if scheduler is not None:
         if not isinstance(scheduler_state, Mapping):

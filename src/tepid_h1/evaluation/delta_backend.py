@@ -112,7 +112,7 @@ def validate_delta_backend(config: DeltaBackendValidationConfig) -> dict[str, An
         )
     comparisons["chunked_recurrence"] = _compare_chunked(
         reference,
-        candidate,
+        candidate,  # type: ignore[arg-type]
         input_cpu.to(device=device, dtype=dtype),
         state_cpu.to(device=device, dtype=dtype),
         **tolerance,
@@ -121,7 +121,7 @@ def validate_delta_backend(config: DeltaBackendValidationConfig) -> dict[str, An
 
     timing = _benchmark_pair(
         reference,
-        candidate,
+        candidate,  # type: ignore[arg-type]
         input_cpu.to(device=device, dtype=dtype),
         state_cpu.to(device=device, dtype=dtype),
         iterations=config.iterations,

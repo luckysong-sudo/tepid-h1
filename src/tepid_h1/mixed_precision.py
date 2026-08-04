@@ -8,7 +8,6 @@ from enum import Enum
 from typing import Any
 
 import torch
-from torch import nn
 
 
 class PrecisionMode(str, Enum):
@@ -69,10 +68,10 @@ class MixedPrecisionManager:
             return self.scaler.scale(loss)
         return loss
 
-    def unscale_grads(self, model: nn.Module) -> None:
+    def unscale_grads(self, optimizer: torch.optim.Optimizer) -> None:
         """Unscale gradients after backward pass."""
         if self.scaler is not None:
-            self.scaler.unscale_(model)
+            self.scaler.unscale_(optimizer)
 
     def step(self, optimizer: torch.optim.Optimizer) -> None:
         """Perform optimizer step with scaling."""

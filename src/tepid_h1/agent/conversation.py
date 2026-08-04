@@ -91,7 +91,7 @@ class Conversation:
             if turn.assistant_message:
                 if turn.assistant_message.tool_calls:
                     for tc in turn.assistant_message.tool_calls:
-                        lines.append(f"Assistant called: {tc.function.name}({tc.function.arguments})")
+                        lines.append(f"Assistant called: {tc.arguments}")  # type: ignore[attr-defined]
                 else:
                     lines.append(f"Assistant: {turn.assistant_message.content}")
             for obs in turn.observations:
@@ -151,7 +151,9 @@ class ConversationAgent:
             final_answer=result if isinstance(result, FinalAnswer) else None,
             completed=True,
         )
-        return conversation.current_turn
+        turn = conversation.current_turn
+        assert turn is not None
+        return turn
 
     def list_conversations(self) -> list[str]:
         return list(self._conversations.keys())

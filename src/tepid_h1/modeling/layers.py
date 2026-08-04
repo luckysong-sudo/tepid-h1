@@ -262,7 +262,7 @@ class GQAAttentionReference(nn.Module):
             device=x.device,
             dtype=torch.float32,
         )
-        angles = torch.outer(positions, self.rotary_inv_frequency.float())
+        angles = torch.outer(positions, self.rotary_inv_frequency.to(torch.float32))  # type: ignore[arg-type]
         cosine = angles.cos()[None, None].to(dtype=x.dtype)
         sine = angles.sin()[None, None].to(dtype=x.dtype)
         even = x[..., 0::2]

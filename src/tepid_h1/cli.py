@@ -223,7 +223,7 @@ def main() -> int:
             if args.variant == "prototype"
             else TepidH1Config.reference_28b_a7b()
         )
-        payload = {
+        payload: dict[str, Any] = {
             "config": config.to_dict(),
             "module_counts": config.module_counts(),
             "layers": [
@@ -239,25 +239,25 @@ def main() -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
     if args.command == "data-audit":
-        report = audit_inventory(load_inventory(args.inventory))
-        _write_payload(report.to_dict(), args.report)
-        return 0 if report.passed else 2
+        audit_result = audit_inventory(load_inventory(args.inventory))
+        _write_payload(audit_result.to_dict(), args.report)
+        return 0 if audit_result.passed else 2
     if args.command == "decontaminate":
-        report = compare_corpora(
+        decontam_result = compare_corpora(
             load_text_records(args.training),
             load_text_records(args.benchmark),
             ngram_size=args.ngram_size,
             similarity_threshold=args.threshold,
         )
-        payload = {
+        payload: dict[str, Any] = {  # type: ignore[no-redef]
             "schema_version": 1,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "training_file_sha256": file_sha256(args.training),
             "benchmark_file_sha256": file_sha256(args.benchmark),
-            **report.to_dict(),
+            **decontam_result.to_dict(),
         }
         _write_payload(payload, args.report)
-        return 0 if report.clean else 3
+        return 0 if decontam_result.clean else 3
     if args.command == "tokenizer-benchmark":
         samples = load_corpus(args.corpus)
         candidates: list[dict[str, Any]] = []
@@ -273,11 +273,11 @@ def main() -> int:
                 benchmark_candidate(
                     name=path.stem,
                     vocab_size=vocab_size,
-                    encode=lambda text, instance=tokenizer: instance.encode(text).ids,
+                    encode=lambda text, instance=tokenizer: instance.encode(text).ids,  # type: ignore[misc]
                     samples=samples,
                 )
             )
-        payload = {
+        payload = {  # type: ignore[no-redef]
             "schema_version": 1,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "corpus_sha256": corpus_digest(samples),
@@ -608,8 +608,8 @@ def main() -> int:
 
         config = TepidH1Config.smoke()
         torch.manual_seed(args.seed)
-        model = TepidH1Model(config).eval()
-        counts = None
+        model = TepidH1Model(config).eval()  # type: ignore[assignment]
+        counts: torch.Tensor | None = None
         with torch.no_grad():
             for _ in range(args.steps):
                 input_ids = torch.randint(
@@ -617,16 +617,17 @@ def main() -> int:
                     (args.batch_size, args.sequence_length),
                 )
                 model(input_ids)
-                step_counts = model.moe_router_counts()
+                step_counts = model.moe_router_counts()  # type: ignore[operator]
                 if step_counts is None:
                     raise RuntimeError("smoke model did not produce MoE routing statistics")
                 counts = step_counts if counts is None else counts + step_counts
-        routing = MoERouterStats(counts, torch.empty(0)).balance_report(max_load_cv=args.max_load_cv)
+        assert counts is not None
+        routing = MoERouterStats(counts, torch.empty(0)).balance_report(max_load_cv=args.max_load_cv)  # type: ignore[arg-type]
         routing["moe_layers"] = sum(
-            isinstance(layer.channel_mixer, RoutedMoEReference) for layer in model.layers
+            isinstance(layer.channel_mixer, RoutedMoEReference) for layer in model.layers  # type: ignore[union-attr]
         )
         routing["observed_layers"] = routing["moe_layers"]
-        payload = {
+        payload = {  # type: ignore[no-redef]
             "schema_version": 1,
             "experiment": "moe_routing_smoke",
             "interpretation": (
@@ -680,7 +681,7 @@ def main() -> int:
         return 0
     if args.command == "corpus-stats":
         stats = summarize_paired_corpus(args.corpus)
-        payload = {
+        payload: dict[str, Any] = {  # type: ignore[no-redef]
             "schema_version": 1,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "corpus_file_sha256": file_sha256(args.corpus),
@@ -690,7 +691,7 @@ def main() -> int:
         return 0 if not stats.duplicate_record_ids else 6
     if args.command == "corpus-compare":
         report = check_paired_corpus_isolation(args.training, args.validation)
-        payload = {
+        payload: dict[str, Any] = {  # type: ignore[no-redef]
             "schema_version": 1,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "training_file_sha256": file_sha256(args.training),

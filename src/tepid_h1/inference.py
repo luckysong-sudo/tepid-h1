@@ -136,8 +136,8 @@ class InferenceEngine:
                 attention_states=(
                     tuple(
                         None if cache is None else AttentionState(
-                            key=cache.k_cache,
-                            value=cache.v_cache,
+                            key=cache.k_cache if cache.k_cache is not None else torch.empty(0),
+                            value=cache.v_cache if cache.v_cache is not None else torch.empty(0),
                             tokens_seen=0,
                         ) for cache in self._attention_caches
                     ) if self._use_kv_cache else None
@@ -158,9 +158,11 @@ class InferenceEngine:
                 effective_config.num_return_sequences, dim=0
             )
             if delta_states is not None:
-                delta_states = _expand_states(delta_states, effective_config.num_return_sequences)
+                expanded_delta = _expand_states(delta_states, effective_config.num_return_sequences)
+                delta_states = expanded_delta if expanded_delta is not None else delta_states  # type: ignore[assignment]
             if attention_states is not None:
-                attention_states = _expand_states(attention_states, effective_config.num_return_sequences)
+                expanded_attn = _expand_states(attention_states, effective_config.num_return_sequences)
+                attention_states = expanded_attn if expanded_attn is not None else attention_states  # type: ignore[assignment]
             batch_size *= effective_config.num_return_sequences
 
         # Autoregressive decoding
@@ -296,7 +298,7 @@ def _expand_states(
     """Expand states for multiple sequences."""
     if states is None:
         return None
-    expanded = []
+    expanded: list[Tensor | AttentionState] = []
     for state in states:
         if isinstance(state, AttentionState):
             expanded.append(
@@ -308,7 +310,7 @@ def _expand_states(
             )
         else:
             expanded.append(state.repeat_interleave(repeats, dim=0))
-    return tuple(expanded)
+    return tuple(expanded)  # type: ignore[return-value]
 
 
 def decode_text(

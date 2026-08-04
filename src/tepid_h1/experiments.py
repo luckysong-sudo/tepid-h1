@@ -385,7 +385,7 @@ def _run_trial(
                 {
                     **asdict(metrics),
                     "elapsed_seconds": elapsed,
-                    "peak_memory_bytes": peak_memory,
+                    "peak_memory_bytes": peak_memory,  # type: ignore[dict-item]
                 }
             )
 
