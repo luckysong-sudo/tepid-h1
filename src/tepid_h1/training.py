@@ -271,12 +271,12 @@ def load_checkpoint(
     if not isinstance(step, int) or isinstance(step, bool) or step < 0:
         raise ValueError("checkpoint step must be a non-negative integer")
     metadata = payload.get("metadata", {})
-    if not isinstance(metadata, dict):
-        raise TypeError("checkpoint metadata must be a mapping")
+    _validate_checkpoint_metadata(metadata)
     model_state = payload.get("model_state")
     optimizer_state = payload.get("optimizer_state")
     scheduler_state = payload.get("scheduler_state")
     rng_state = payload.get("rng_state")
+    cuda_rng_states = _validate_checkpoint_cuda_rng_states(payload.get("cuda_rng_states", []))
     if not isinstance(model_state, Mapping):
         raise TypeError("checkpoint model_state must be a mapping")
     if optimizer is not None and not isinstance(optimizer_state, dict):
@@ -294,7 +294,6 @@ def load_checkpoint(
     if scheduler is not None:
         scheduler.load_state_dict(cast(Mapping[str, Any], scheduler_state))
     torch.set_rng_state(rng_state.cpu())
-    cuda_rng_states = payload.get("cuda_rng_states", [])
     if torch.cuda.is_available() and cuda_rng_states:
         torch.cuda.set_rng_state_all(cuda_rng_states)
     return CheckpointState(step=step, metadata=metadata)
@@ -332,6 +331,32 @@ def _validate_checkpoint_scheduler_state(
         raise ValueError("checkpoint scheduler step is invalid")
     if completed_steps != step:
         raise ValueError("checkpoint scheduler step does not match checkpoint step")
+
+
+def _validate_checkpoint_metadata(metadata: Any) -> None:
+    if not isinstance(metadata, Mapping):
+        raise TypeError("checkpoint metadata must be a mapping")
+    try:
+        json.dumps(metadata)
+    except (TypeError, ValueError) as error:
+        raise TypeError(
+            "checkpoint metadata must contain only JSON-compatible values"
+        ) from error
+
+
+def _validate_checkpoint_cuda_rng_states(value: Any) -> list[Tensor]:
+    if not isinstance(value, list):
+        raise TypeError("checkpoint cuda_rng_states must be a list")
+    states: list[Tensor] = []
+    for index, state in enumerate(value):
+        if not isinstance(state, Tensor):
+            raise TypeError(f"checkpoint cuda_rng_states[{index}] must be a tensor")
+        if state.dtype != torch.uint8 or state.ndim != 1:
+            raise ValueError(
+                f"checkpoint cuda_rng_states[{index}] must be a 1D uint8 tensor"
+            )
+        states.append(state)
+    return states
 
 
 def _count_supervised_target_tokens(

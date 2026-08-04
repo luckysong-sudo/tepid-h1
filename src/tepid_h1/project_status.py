@@ -118,6 +118,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "mixed precision preserves token tensor dtype and restores runtime state safely",
             "checkpoint saving rejects invalid step types and scheduler-step mismatches",
             "checkpoint loading rejects scheduler mismatches before mutating model state",
+            "checkpoint loading validates metadata and CUDA RNG payloads before state restore",
             "generation keyword overrides are applied by explicit presence, not default values",
             "generation validates prompt shape, dtype and token range before model execution",
             "generation rejects context lengths beyond model and reference-kernel limits",
