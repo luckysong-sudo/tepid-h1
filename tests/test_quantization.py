@@ -172,3 +172,31 @@ class TestSaveQuantizedModel:
         assert path.exists()
         assert "schema_version" in artifacts
         assert "quantized_layers" in artifacts
+
+    def test_save_nf4_model(self, tmp_path: Path) -> None:
+        model = nn.Linear(8, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.NF4, group_size=0)
+        qlayers = quantize_model(model, cfg)
+        path = tmp_path / "nf4_model.pt"
+        artifacts = save_quantized_model(model, qlayers, path, config=cfg)
+        assert path.exists()
+        assert artifacts["quantization_mode"] == "nf4"
+
+    def test_estimate_nf4_size(self) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.NF4, group_size=0)
+        sizes = estimate_quantized_size(model, cfg)
+        assert sizes["weight_bytes"] > 0
+        assert sizes["scale_bytes"] > 0
+
+    def test_estimate_fp8_size(self) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.FP8)
+        sizes = estimate_quantized_size(model, cfg)
+        assert sizes["weight_bytes"] > 0
+
+    def test_estimate_bf16_size(self) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.BF16)
+        sizes = estimate_quantized_size(model, cfg)
+        assert sizes["weight_bytes"] > 0
