@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -115,6 +116,8 @@ class AttentionCache:
         }
 
     def load_state_dict(self, state: dict[str, Any]) -> None:
+        if not isinstance(state, Mapping):
+            raise TypeError("attention cache state must be a mapping")
         seq_len = state.get("seq_len", 0)
         if not isinstance(seq_len, int) or isinstance(seq_len, bool) or seq_len < 0:
             raise ValueError("seq_len must be a non-negative integer")
@@ -126,14 +129,58 @@ class AttentionCache:
             k_cache = torch.as_tensor(k_cache)
         if v_cache is not None:
             v_cache = torch.as_tensor(v_cache)
-        if k_cache is not None and v_cache is not None and k_cache.shape[-2] != v_cache.shape[-2]:
-            raise ValueError("cached key and value sequences must have equal length")
+        device = _resolve_cache_device(device_str)
+        dtype = _resolve_cache_dtype(dtype_str)
+        if (k_cache is None) != (v_cache is None):
+            raise ValueError("cached key and value states must be provided together")
+        if k_cache is None and seq_len != 0:
+            raise ValueError("empty attention cache state must have seq_len 0")
+        if k_cache is not None:
+            _validate_cache_tensors(k_cache, v_cache, seq_len, expected_dtype=dtype)
         self.seq_len = seq_len
-        self.device = torch.device(device_str)
-        self.dtype = {
-            "float32": torch.float32,
-            "float16": torch.float16,
-            "bfloat16": torch.bfloat16,
-        }.get(dtype_str, torch.float32)
+        self.device = device
+        self.dtype = dtype
         self.k_cache = cast(Tensor | None, k_cache)
         self.v_cache = cast(Tensor | None, v_cache)
+
+
+def _validate_cache_tensors(
+    k_cache: Tensor,
+    v_cache: Any,
+    seq_len: int,
+    *,
+    expected_dtype: torch.dtype,
+) -> None:
+    if not isinstance(v_cache, Tensor):
+        raise TypeError("cached value state must be a tensor")
+    if k_cache.ndim != 3 or v_cache.ndim != 3:
+        raise ValueError("cached key and value states must be 3D tensors")
+    if k_cache.shape != v_cache.shape:
+        raise ValueError("cached key and value states must have identical shapes")
+    if k_cache.shape[-2] != seq_len:
+        raise ValueError("seq_len must match cached key and value sequence length")
+    if k_cache.dtype != v_cache.dtype:
+        raise ValueError("cached key and value dtypes must match")
+    if k_cache.dtype != expected_dtype:
+        raise ValueError("attention cache dtype must match cached tensors")
+
+
+def _resolve_cache_device(value: Any) -> torch.device:
+    try:
+        return torch.device(value)
+    except (TypeError, RuntimeError) as error:
+        raise ValueError("attention cache device must be a valid torch device") from error
+
+
+def _resolve_cache_dtype(value: Any) -> torch.dtype:
+    aliases = {
+        "float32": torch.float32,
+        "torch.float32": torch.float32,
+        "float16": torch.float16,
+        "torch.float16": torch.float16,
+        "bfloat16": torch.bfloat16,
+        "torch.bfloat16": torch.bfloat16,
+    }
+    if value not in aliases:
+        raise ValueError("attention cache dtype must be float32, float16 or bfloat16")
+    return aliases[value]
