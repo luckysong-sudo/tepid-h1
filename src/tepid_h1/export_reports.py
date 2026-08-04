@@ -47,7 +47,7 @@ def export_json(report: dict[str, Any], output_path: str | Path) -> Path:
     return output_path
 
 
-def export_reports(reports: dict[str, dict[str, Any]], output_dir: str | Path) -> dict[str, Path]:
+def export_reports(reports: dict[str, dict[str, Any]], output_dir: str | Path) -> dict[str, dict[str, Path]]:
     """Export multiple reports to both CSV and JSON formats.
 
     Args:
