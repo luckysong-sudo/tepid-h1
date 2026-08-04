@@ -513,6 +513,38 @@ class TrainingTests(unittest.TestCase):
         for before, after in zip(target_before, target.parameters(), strict=True):
             torch.testing.assert_close(after, before, rtol=0, atol=0)
 
+    def test_checkpoint_load_rejects_invalid_cpu_rng_state_before_model_mutation(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import causal_lm_train_step, load_checkpoint, save_checkpoint
+
+        config = TepidH1Config.smoke()
+        source = TepidH1CausalLM(config)
+        source_optimizer = torch.optim.AdamW(source.parameters(), lr=1e-3)
+        causal_lm_train_step(
+            source,
+            torch.randint(0, config.vocab_size, (1, 6)),
+            source_optimizer,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "bad-cpu-rng.pt"
+            save_checkpoint(checkpoint, model=source, optimizer=source_optimizer, step=1)
+            payload = torch.load(checkpoint, weights_only=True)
+            payload["rng_state"] = torch.ones(2, dtype=torch.float32)
+            torch.save(payload, checkpoint)
+
+            target = TepidH1CausalLM(config)
+            target_before = tuple(parameter.detach().clone() for parameter in target.parameters())
+            target_optimizer = torch.optim.AdamW(target.parameters(), lr=1e-3)
+
+            with self.assertRaisesRegex(ValueError, "rng_state"):
+                load_checkpoint(checkpoint, model=target, optimizer=target_optimizer)
+
+        self.assertFalse(target_optimizer.state_dict()["state"])
+        for before, after in zip(target_before, target.parameters(), strict=True):
+            torch.testing.assert_close(after, before, rtol=0, atol=0)
+
     def test_resume_contract_fails_closed_on_data_or_recipe_change(self):
         from tepid_h1.training import validate_resume_contract
 

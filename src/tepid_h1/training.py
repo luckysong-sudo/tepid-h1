@@ -275,14 +275,12 @@ def load_checkpoint(
     model_state = payload.get("model_state")
     optimizer_state = payload.get("optimizer_state")
     scheduler_state = payload.get("scheduler_state")
-    rng_state = payload.get("rng_state")
+    rng_state = _validate_checkpoint_rng_state(payload.get("rng_state"))
     cuda_rng_states = _validate_checkpoint_cuda_rng_states(payload.get("cuda_rng_states", []))
     if not isinstance(model_state, Mapping):
         raise TypeError("checkpoint model_state must be a mapping")
     if optimizer is not None and not isinstance(optimizer_state, dict):
         raise TypeError("checkpoint optimizer_state must be a mapping")
-    if not isinstance(rng_state, Tensor):
-        raise TypeError("checkpoint rng_state must be a tensor")
     if scheduler is not None:
         _validate_checkpoint_scheduler_state(scheduler_state, scheduler, step)
 
@@ -344,19 +342,25 @@ def _validate_checkpoint_metadata(metadata: Any) -> None:
         ) from error
 
 
+def _validate_checkpoint_rng_state(value: Any) -> Tensor:
+    return _validate_rng_state_tensor(value, "checkpoint rng_state")
+
+
 def _validate_checkpoint_cuda_rng_states(value: Any) -> list[Tensor]:
     if not isinstance(value, list):
         raise TypeError("checkpoint cuda_rng_states must be a list")
     states: list[Tensor] = []
     for index, state in enumerate(value):
-        if not isinstance(state, Tensor):
-            raise TypeError(f"checkpoint cuda_rng_states[{index}] must be a tensor")
-        if state.dtype != torch.uint8 or state.ndim != 1:
-            raise ValueError(
-                f"checkpoint cuda_rng_states[{index}] must be a 1D uint8 tensor"
-            )
-        states.append(state)
+        states.append(_validate_rng_state_tensor(state, f"checkpoint cuda_rng_states[{index}]"))
     return states
+
+
+def _validate_rng_state_tensor(value: Any, field_name: str) -> Tensor:
+    if not isinstance(value, Tensor):
+        raise TypeError(f"{field_name} must be a tensor")
+    if value.dtype != torch.uint8 or value.ndim != 1:
+        raise ValueError(f"{field_name} must be a 1D uint8 tensor")
+    return value
 
 
 def _count_supervised_target_tokens(
