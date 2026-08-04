@@ -95,6 +95,23 @@ class TestModelExporter:
         assert config["hidden_size"] == 32
         assert config["num_layers"] == 8
 
+    def test_export_safe_tensor_with_non_dataclass_config(self, tmp_path: Path) -> None:
+        from dataclasses import dataclass
+
+        @dataclass
+        class SimpleConfig:
+            vocab_size: int = 128
+            hidden_size: int = 32
+
+        config = SimpleConfig()
+        model = TepidH1CausalLM(TepidH1Config.smoke())
+        exporter = ModelExporter(model, config)
+        output_path = tmp_path / "model.safetensors"
+        result = exporter.export_safe_tensor(output_path)
+        assert result.exists()
+        config_path = result.parent / "config.json"
+        assert config_path.exists()
+
     @pytest.mark.skip(reason="TorchScript not supported for keyword-only args in Python 3.14+")
     def test_torchscript_requires_eval(self, exporter: ModelExporter, tmp_path: Path) -> None:
         exporter.model.train()
