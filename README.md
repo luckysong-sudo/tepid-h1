@@ -8,7 +8,7 @@ Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**�
 - 8 层宏块及 48 层参考配置生成器；
 - Gated Delta Memory 的逐 Token 正确性参考实现；
 - 带流式绝对位置跟踪、RoPE 与无 KV 复制原生路径的局部 GQA 精确注意力；
-- 全局注意力的安全参考回退（当前不是生产级稀疏内核）；
+- 全局稀疏注意力的确定性参考路径（局部窗口 + 全局锚点，当前不是生产级稀疏内核）；
 - Delta 与注意力 KV 状态续传，支持整模型分块一致性验证；
 - Dense SwiGLU 与 Top-K Routed MoE 参考实现；
 - Tepid-H1 Backbone 与 Causal LM 装配；
@@ -28,9 +28,10 @@ Tepid-H1 的可执行参考框架。当前版本用于 **M0—M2 原型验证**�
 ## 明确限制
 
 `GatedDeltaMemoryReference` 使用 Python 时间循环，只用于公式、梯度和小模型验证。
-`GlobalSparseAttentionReference` 在短序列上回退为全因果注意力，尚未实现 NSA
-压缩/选择/滑窗三分支。MoE 也采用逐专家分发参考实现。以上模块在 350M 之前必须
-分别替换或接入经过数值对照的 Triton/CUDA 后端。
+`GlobalSparseAttentionReference` 使用局部窗口加固定 stride 全局锚点的确定性稀疏
+因果 mask，并保留完整 KV 历史用于分块一致性验证；它仍不是生产 NSA 内核，尚未实现
+压缩/选择/滑窗三分支。MoE 也采用参考实现。以上模块在 350M 之前必须分别替换或接入
+经过数值对照的 Triton/CUDA 后端。
 
 ## 快速检查
 

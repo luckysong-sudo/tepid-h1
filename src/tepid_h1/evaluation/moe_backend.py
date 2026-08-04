@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import platform
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
+from math import isfinite
 from typing import Any
 
 import torch
@@ -22,6 +23,9 @@ class RoutedMoEBenchmarkConfig:
     sequence_lengths: tuple[int, ...] = (4, 8, 16)
     iterations: int = 3
     seed: int = 97
+    target_device_label: str | None = None
+    router_assignment_cv_threshold: float = 0.25
+    minimum_grouped_over_dispatch_speedup: float = 1.0
 
     def __post_init__(self) -> None:
         if self.variant not in {"smoke", "prototype"}:
@@ -41,11 +45,29 @@ class RoutedMoEBenchmarkConfig:
                 raise ValueError("sequence_lengths must be between 1 and 256")
         if not 1 <= self.iterations <= 100:
             raise ValueError("iterations must be between 1 and 100")
+        if self.target_device_label is not None and not self.target_device_label.strip():
+            raise ValueError("target_device_label must be non-empty when provided")
+        if (
+            isinstance(self.router_assignment_cv_threshold, bool)
+            or not isfinite(self.router_assignment_cv_threshold)
+            or self.router_assignment_cv_threshold < 0
+        ):
+            raise ValueError("router_assignment_cv_threshold must be finite and non-negative")
+        if (
+            isinstance(self.minimum_grouped_over_dispatch_speedup, bool)
+            or not isfinite(self.minimum_grouped_over_dispatch_speedup)
+            or self.minimum_grouped_over_dispatch_speedup < 0
+        ):
+            raise ValueError(
+                "minimum_grouped_over_dispatch_speedup must be finite and non-negative"
+            )
 
 
 def benchmark_routed_moe(config: RoutedMoEBenchmarkConfig) -> dict[str, Any]:
     device, dtype = _resolve_device(config)
     model_config = _model_config(config.variant)
+    target_hardware_evidence = device.type == "cuda" and config.target_device_label is not None
+    boundary_lengths = _boundary_sequence_lengths(config.sequence_lengths)
 
     torch.manual_seed(config.seed)
     layer = RoutedMoEReference(model_config).to(device=device, dtype=dtype).eval()
@@ -71,10 +93,27 @@ def benchmark_routed_moe(config: RoutedMoEBenchmarkConfig) -> dict[str, Any]:
             iterations=config.iterations,
             device=device,
         )
+        router = _router_report(layer, model_config.moe_top_k)
+        router_cv_status = _router_cv_status(
+            router["assignment_coefficient_of_variation"],
+            config.router_assignment_cv_threshold,
+        )
+        speedup_status = _speedup_status(
+            timing["grouped_over_dispatch_speedup"],
+            config.minimum_grouped_over_dispatch_speedup,
+        )
         cases.append(
             {
+                "case_id": f"moe-{config.variant}-{config.device}-{config.dtype}-b"
+                f"{config.batch_size}-s{sequence_length}",
                 "sequence_length": sequence_length,
+                "shape_role": _shape_role(sequence_length, boundary_lengths),
                 "batch_tokens": input_tensor.shape[0] * input_tensor.shape[1],
+                "batch_size": config.batch_size,
+                "device": config.device,
+                "dtype": config.dtype,
+                "target_device_label": config.target_device_label,
+                "target_hardware_evidence": target_hardware_evidence,
                 "tokens": timing["tokens"],
                 "dispatch_oracle_elapsed_seconds": timing["dispatch_oracle_elapsed_seconds"],
                 "grouped_elapsed_seconds": timing["grouped_elapsed_seconds"],
@@ -83,14 +122,55 @@ def benchmark_routed_moe(config: RoutedMoEBenchmarkConfig) -> dict[str, Any]:
                 "grouped_tokens_per_second": timing["grouped_tokens_per_second"],
                 "tokens_per_second": timing["grouped_tokens_per_second"],
                 "grouped_over_dispatch_speedup": timing["grouped_over_dispatch_speedup"],
+                "minimum_grouped_over_dispatch_speedup": (
+                    config.minimum_grouped_over_dispatch_speedup
+                ),
+                **speedup_status,
                 "numerical_passed": numerical_passed,
                 "max_abs_error": max_abs_error,
-                "router": _router_report(layer, model_config.moe_top_k),
+                "router": {
+                    **router,
+                    "assignment_cv_threshold": config.router_assignment_cv_threshold,
+                    "assignment_cv_within_threshold": (
+                        router["assignment_coefficient_of_variation"]
+                        <= config.router_assignment_cv_threshold
+                    ),
+                    **router_cv_status,
+                },
             }
         )
 
     throughputs = [case["tokens_per_second"] for case in cases]
     speedups = [case["grouped_over_dispatch_speedup"] for case in cases]
+    router_load_cvs = [
+        case["router"]["assignment_coefficient_of_variation"] for case in cases
+    ]
+    max_router_cv_case = _max_router_cv_case(cases)
+    min_speedup_case = _min_speedup_case(cases)
+    summary_router_cv_status = _router_cv_status(
+        max_router_cv_case["router"]["assignment_coefficient_of_variation"],
+        config.router_assignment_cv_threshold,
+    )
+    summary_speedup_status = _speedup_status(
+        min_speedup_case["grouped_over_dispatch_speedup"],
+        config.minimum_grouped_over_dispatch_speedup,
+    )
+    shape_roles = _count_values(str(case["shape_role"]) for case in cases)
+    all_numerical_passed = all(case["numerical_passed"] for case in cases)
+    all_grouped_speedups_meet_threshold = all(
+        value >= config.minimum_grouped_over_dispatch_speedup for value in speedups
+    )
+    all_router_assignment_cv_within_threshold = all(
+        value <= config.router_assignment_cv_threshold for value in router_load_cvs
+    )
+    target_hardware_case_count = sum(1 for case in cases if case["target_hardware_evidence"])
+    m4_proxy_status = _m4_moe_proxy_status(
+        all_numerical_passed=all_numerical_passed,
+        all_grouped_speedups_meet_threshold=all_grouped_speedups_meet_threshold,
+        all_router_assignment_cv_within_threshold=all_router_assignment_cv_within_threshold,
+        target_hardware_case_count=target_hardware_case_count,
+        case_count=len(cases),
+    )
     return {
         "schema_version": 1,
         "experiment": "routed_moe_benchmark_matrix",
@@ -103,15 +183,45 @@ def benchmark_routed_moe(config: RoutedMoEBenchmarkConfig) -> dict[str, Any]:
             "expert_intermediate_size": model_config.moe_expert_intermediate_size,
             "shared_intermediate_size": model_config.moe_shared_intermediate_size,
         },
-        "environment": _environment(device, dtype),
+        "environment": {
+            **_environment(device, dtype),
+            "target_device_label_declared": config.target_device_label is not None,
+            "sequence_length_min": min(config.sequence_lengths),
+            "sequence_length_max": max(config.sequence_lengths),
+        },
         "cases": cases,
         "summary": {
             "case_count": len(cases),
-            "all_numerical_passed": all(case["numerical_passed"] for case in cases),
+            "all_numerical_passed": all_numerical_passed,
+            "target_hardware_case_count": target_hardware_case_count,
+            "shape_roles": shape_roles,
             "min_tokens_per_second": min(throughputs),
             "max_tokens_per_second": max(throughputs),
             "min_grouped_over_dispatch_speedup": min(speedups),
             "max_grouped_over_dispatch_speedup": max(speedups),
+            "min_grouped_over_dispatch_speedup_case_id": min_speedup_case["case_id"],
+            "min_grouped_over_dispatch_speedup_sequence_length": min_speedup_case[
+                "sequence_length"
+            ],
+            "minimum_grouped_over_dispatch_speedup": (
+                config.minimum_grouped_over_dispatch_speedup
+            ),
+            "all_grouped_speedups_meet_threshold": all_grouped_speedups_meet_threshold,
+            "grouped_speedup_status": summary_speedup_status["grouped_speedup_status"],
+            "grouped_speedup_reason": summary_speedup_status["grouped_speedup_reason"],
+            "min_router_assignment_cv": min(router_load_cvs),
+            "max_router_assignment_cv": max(router_load_cvs),
+            "max_router_assignment_cv_case_id": max_router_cv_case["case_id"],
+            "max_router_assignment_cv_sequence_length": max_router_cv_case[
+                "sequence_length"
+            ],
+            "router_assignment_cv_threshold": config.router_assignment_cv_threshold,
+            "all_router_assignment_cv_within_threshold": (
+                all_router_assignment_cv_within_threshold
+            ),
+            "router_assignment_cv_status": summary_router_cv_status["assignment_cv_status"],
+            "router_assignment_cv_reason": summary_router_cv_status["assignment_cv_reason"],
+            **m4_proxy_status,
         },
         "interpretation": (
             "This benchmark compares the grouped selected-expert evaluator against a "
@@ -120,6 +230,106 @@ def benchmark_routed_moe(config: RoutedMoEBenchmarkConfig) -> dict[str, Any]:
             "is not an optimized MoE kernel qualification."
         ),
     }
+
+
+def _boundary_sequence_lengths(sequence_lengths: tuple[int, ...]) -> tuple[int, int]:
+    return min(sequence_lengths), max(sequence_lengths)
+
+
+def _shape_role(sequence_length: int, boundaries: tuple[int, int]) -> str:
+    minimum, maximum = boundaries
+    if minimum == maximum:
+        return "single"
+    if sequence_length == minimum:
+        return "minimum"
+    if sequence_length == maximum:
+        return "maximum"
+    return "intermediate"
+
+
+def _count_values(values: Iterable[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def _router_cv_status(value: float, threshold: float) -> dict[str, str]:
+    if value <= threshold:
+        return {
+            "assignment_cv_status": "passed",
+            "assignment_cv_reason": (
+                f"assignment CV {value:.6g} is within threshold {threshold:.6g}"
+            ),
+        }
+    return {
+        "assignment_cv_status": "failed",
+        "assignment_cv_reason": (
+            f"assignment CV {value:.6g} exceeds threshold {threshold:.6g}"
+        ),
+    }
+
+
+def _speedup_status(value: float, threshold: float) -> dict[str, str | bool]:
+    if value >= threshold:
+        return {
+            "grouped_speedup_meets_threshold": True,
+            "grouped_speedup_status": "passed",
+            "grouped_speedup_reason": (
+                f"grouped speedup {value:.6g} meets threshold {threshold:.6g}"
+            ),
+        }
+    return {
+        "grouped_speedup_meets_threshold": False,
+        "grouped_speedup_status": "failed",
+        "grouped_speedup_reason": (
+            f"grouped speedup {value:.6g} is below threshold {threshold:.6g}"
+        ),
+    }
+
+
+def _m4_moe_proxy_status(
+    *,
+    all_numerical_passed: bool,
+    all_grouped_speedups_meet_threshold: bool,
+    all_router_assignment_cv_within_threshold: bool,
+    target_hardware_case_count: int,
+    case_count: int,
+) -> dict[str, Any]:
+    blockers = []
+    if not all_numerical_passed:
+        blockers.append("numerical parity failed for one or more cases")
+    if target_hardware_case_count != case_count:
+        blockers.append(
+            f"target-hardware evidence is present for {target_hardware_case_count} "
+            f"of {case_count} cases"
+        )
+    if not all_grouped_speedups_meet_threshold:
+        blockers.append("grouped speedup threshold failed for one or more cases")
+    if not all_router_assignment_cv_within_threshold:
+        blockers.append("router assignment CV threshold failed for one or more cases")
+    if blockers:
+        return {
+            "m4_moe_proxy_passed": False,
+            "m4_moe_proxy_status": "blocked",
+            "m4_moe_proxy_blockers": blockers,
+        }
+    return {
+        "m4_moe_proxy_passed": True,
+        "m4_moe_proxy_status": "passed",
+        "m4_moe_proxy_blockers": [],
+    }
+
+
+def _max_router_cv_case(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    return max(
+        cases,
+        key=lambda case: case["router"]["assignment_coefficient_of_variation"],
+    )
+
+
+def _min_speedup_case(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    return min(cases, key=lambda case: case["grouped_over_dispatch_speedup"])
 
 
 def _model_config(variant: str) -> TepidH1Config:
@@ -219,6 +429,10 @@ def _router_report(layer: RoutedMoEReference, top_k: int) -> dict[str, Any]:
     assignment_count = sum(expert_counts)
     expected_assignments = stats.router_probabilities.shape[0] * top_k
     average_assignments = assignment_count / len(expert_counts)
+    variance = sum((count - average_assignments) ** 2 for count in expert_counts) / len(
+        expert_counts
+    )
+    assignment_cv = (variance**0.5) / average_assignments
     probabilities = stats.router_probabilities.detach().float()
     entropy = -(probabilities * probabilities.clamp_min(1e-12).log()).sum(dim=-1)
     return {
@@ -229,6 +443,7 @@ def _router_report(layer: RoutedMoEReference, top_k: int) -> dict[str, Any]:
         "max_expert_assignments": max(expert_counts),
         "min_expert_assignments": min(expert_counts),
         "max_over_average_assignments": max(expert_counts) / average_assignments,
+        "assignment_coefficient_of_variation": assignment_cv,
         "mean_router_entropy": float(entropy.mean()),
     }
 

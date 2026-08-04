@@ -196,12 +196,23 @@ class CLIParserTests(unittest.TestCase):
                 "2",
                 "--iterations",
                 "1",
+                "--target-device-label",
+                "local-gpu",
+                "--router-assignment-cv-threshold",
+                "0.5",
+                "--minimum-grouped-speedup",
+                "1.25",
+                "--require-m4-proxy",
             ]
         )
         self.assertEqual(args.command, "moe-benchmark")
         self.assertEqual(args.variant, "prototype")
         self.assertEqual(args.sequence_lengths, [2])
         self.assertEqual(args.iterations, 1)
+        self.assertEqual(args.target_device_label, "local-gpu")
+        self.assertEqual(args.router_assignment_cv_threshold, 0.5)
+        self.assertEqual(args.minimum_grouped_speedup, 1.25)
+        self.assertTrue(args.require_m4_proxy)
 
 
 class CLIIntegrationTests(unittest.TestCase):
@@ -369,6 +380,52 @@ class CLIIntegrationTests(unittest.TestCase):
                     result = main()
 
         self.assertEqual(result, 0)
+
+    def test_moe_benchmark_report_mode_returns_zero_when_proxy_blocked(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        report = {
+            "schema_version": 1,
+            "summary": {"m4_moe_proxy_passed": False},
+        }
+        with patch.object(sys, "argv", ["tepid-h1", "moe-benchmark"]):
+            with patch(
+                "tepid_h1.evaluation.moe_backend.benchmark_routed_moe",
+                return_value=report,
+            ):
+                with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                    result = main()
+                    output = json.loads(mock_stdout.getvalue())
+
+        self.assertEqual(result, 0)
+        self.assertFalse(output["summary"]["m4_moe_proxy_passed"])
+
+    def test_moe_benchmark_require_m4_proxy_returns_nonzero_when_blocked(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        report = {
+            "schema_version": 1,
+            "summary": {"m4_moe_proxy_passed": False},
+        }
+        with patch.object(sys, "argv", ["tepid-h1", "moe-benchmark", "--require-m4-proxy"]):
+            with patch(
+                "tepid_h1.evaluation.moe_backend.benchmark_routed_moe",
+                return_value=report,
+            ):
+                with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                    result = main()
+                    output = json.loads(mock_stdout.getvalue())
+
+        self.assertEqual(result, 11)
+        self.assertFalse(output["summary"]["m4_moe_proxy_passed"])
 
 
 if __name__ == "__main__":

@@ -6,10 +6,10 @@ Tepid-H1 当前是可执行的 M0-M2 原型验证框架，不是正式 28B 训�
 主线能力已经覆盖参考模型、训练闭环、数据治理、检索评估、Delta 后端资格门、
 Agent Runtime、ZeroGPU 适配和 CI 验证。
 
-截至本次整理，本地虚拟环境可收集 244 个测试用例；最近一次本地验证结果为：
+截至本次整理，本地虚拟环境可收集 371 个测试用例；最近一次本地验证结果为：
 
 ```text
-236 passed, 8 skipped
+363 passed, 8 skipped
 ```
 
 ## 已具备能力
@@ -17,7 +17,7 @@ Agent Runtime、ZeroGPU 适配和 CI 验证。
 - 8 层宏块计划和 48 层参考配置生成器。
 - Gated Delta Memory reference/eager 两条路径及前向、状态、梯度一致性测试。
 - 原生 GQA attention、RoPE、局部 KV cache 和分块一致性验证。
-- GlobalSparseAttentionReference 作为短序列全注意力正确性 oracle。
+- GlobalSparseAttentionReference 作为局部窗口 + 全局锚点的确定性稀疏正确性参考路径。
 - Dense SwiGLU、Top-K Routed MoE 和 active-parameter matched baseline。
 - 训练 step、评估、warmup cosine scheduler、可恢复 checkpoint 和 resume contract。
 - 数据资产审计、去污染、paired corpus 统计与训练/验证隔离检查。
@@ -75,5 +75,5 @@ Agent Runtime、ZeroGPU 适配和 CI 验证。
 
 - 跑通 CI 等价的本地质量检查：`pytest`、`ruff check`、`flake8`、`mypy`。
 - 新增改动必须维持 mypy/flake8 零问题基线。
-- 为 Delta/MoE 优化候选实现建立单独 benchmark fixture。
+- 继续扩展 MoE 优化候选 benchmark fixture 和 CUDA target 报告。
 - 更新 ZeroGPU evidence，记录最新核心 revision、质量门结果和报告路径。

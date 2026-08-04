@@ -258,8 +258,15 @@ def _recommended_actions(
 ) -> list[str]:
     if not blockers:
         return [
-            "run tepid-h1 delta-benchmark --device cuda with a target device label",
-            "run tepid-h1 moe-benchmark --device cuda to collect reference routing throughput",
+            (
+                "run tepid-h1 delta-benchmark --device cuda --dtype float32 "
+                "--target-device-label local-gpu --length 4 --length 8 --iterations 3"
+            ),
+            (
+                "run tepid-h1 moe-benchmark --device cuda --dtype float32 "
+                "--length 4 --length 8 --iterations 3 --target-device-label local-gpu "
+                "--router-assignment-cv-threshold 0.25 --minimum-grouped-speedup 1.0"
+            ),
         ]
 
     actions = []
@@ -306,7 +313,8 @@ def _validation_plan(*, ready_for_cuda: bool) -> list[dict[str, str]]:
             "status": cuda_status,
             "command": (
                 "tepid-h1 moe-benchmark --device cuda --dtype float32 "
-                "--length 4 --length 8 --iterations 3"
+                "--length 4 --length 8 --iterations 3 --target-device-label local-gpu "
+                "--router-assignment-cv-threshold 0.25 --minimum-grouped-speedup 1.0"
             ),
             "purpose": "collect CUDA reference MoE routing-load throughput evidence",
             "scope": "operator smoke",

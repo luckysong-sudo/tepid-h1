@@ -91,13 +91,29 @@ tepid-h1 moe-benchmark \
   --length 8 \
   --length 16 \
   --iterations 3 \
+  --target-device-label "declared-target-device" \
+  --router-assignment-cv-threshold 0.25 \
+  --minimum-grouped-speedup 1.0 \
   --report artifacts/moe-benchmark-matrix.json
 ```
 
 The MoE benchmark records per-shape reference throughput, expert assignment counts,
-active expert count and router entropy. It is intended to make future grouped-GEMM or
-fused-dispatch candidates comparable against the current correctness-first reference
-path; it is not itself an optimized-kernel claim.
+active expert count, assignment coefficient of variation, router entropy, stable case IDs,
+shape roles, target-evidence flags, speedup threshold results and router-CV threshold
+pass/fail reasons. It is intended to make future grouped-GEMM or fused-dispatch candidates
+comparable against the current correctness-first reference path; it is not itself an
+optimized-kernel claim.
+The summary identifies the case ID and sequence length with the worst router assignment
+CV so a failing run can be traced back to the responsible shape without scanning every
+case manually.
+It also emits an `m4_moe_proxy_*` status that combines numerical parity, target-hardware
+evidence, grouped speedup and router-CV checks into machine-readable blockers. This is a
+reporting proxy for follow-up evidence, not a substitute for production-batch M4 approval.
+Add `--require-m4-proxy` when a CI or remote runner should return non-zero for a blocked
+proxy report; omit it when collecting evidence without failing the command.
+The default router assignment CV threshold is `0.25`, matching the M4 stage-gate wording,
+and the default grouped-over-dispatch speedup threshold is `1.0`. A smoke-scale CPU run is
+not expected to prove stable production routing balance or production-batch net benefit.
 
 The first verified ZeroGPU BF16 execution and its explicit limitations are recorded in
 `docs/ZEROGPU_EVIDENCE.md`.

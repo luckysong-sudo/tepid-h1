@@ -70,6 +70,9 @@ tepid-h1 delta-benchmark \
 tepid-h1 moe-benchmark \
   --device cuda \
   --dtype float32 \
+  --target-device-label local-gpu \
+  --router-assignment-cv-threshold 0.25 \
+  --minimum-grouped-speedup 1.0 \
   --length 4 \
   --length 8 \
   --iterations 3

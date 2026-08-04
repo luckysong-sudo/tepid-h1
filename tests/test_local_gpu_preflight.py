@@ -81,6 +81,25 @@ class LocalGPUPreflightTests(unittest.TestCase):
         self.assertEqual(ready[1]["status"], "ready")
         self.assertIn("--device cuda", ready[1]["command"])
         self.assertEqual(ready[1]["scope"], "operator smoke")
+        self.assertIn("--target-device-label local-gpu", ready[2]["command"])
+        self.assertIn("--router-assignment-cv-threshold 0.25", ready[2]["command"])
+        self.assertIn("--minimum-grouped-speedup 1.0", ready[2]["command"])
+
+    def test_ready_recommended_actions_include_labeled_benchmark_commands(self):
+        from tepid_h1.integrations.local_gpu import _recommended_actions
+
+        actions = _recommended_actions(
+            {"gpus": [{"name": "NVIDIA Test GPU"}]},
+            {"cuda_runtime": "12.1", "cuda_available": True},
+            [],
+        )
+
+        joined = " ".join(actions)
+        self.assertIn("delta-benchmark", joined)
+        self.assertIn("moe-benchmark", joined)
+        self.assertIn("--target-device-label local-gpu", joined)
+        self.assertIn("--router-assignment-cv-threshold 0.25", joined)
+        self.assertIn("--minimum-grouped-speedup 1.0", joined)
 
     def test_low_memory_gpu_reports_smoke_only_capacity_warning(self):
         from tepid_h1.integrations.local_gpu import _capacity_warnings

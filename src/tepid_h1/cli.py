@@ -232,6 +232,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     moe_benchmark.add_argument("--iterations", type=int, default=3)
     moe_benchmark.add_argument("--seed", type=int, default=97)
+    moe_benchmark.add_argument("--target-device-label")
+    moe_benchmark.add_argument("--router-assignment-cv-threshold", type=float, default=0.25)
+    moe_benchmark.add_argument("--minimum-grouped-speedup", type=float, default=1.0)
+    moe_benchmark.add_argument("--require-m4-proxy", action="store_true")
     moe_benchmark.add_argument("--report", type=Path)
     corpus_stats = subparsers.add_parser(
         "corpus-stats",
@@ -720,9 +724,14 @@ def main() -> int:
                 sequence_lengths=tuple(args.sequence_lengths or (4, 8, 16)),
                 iterations=args.iterations,
                 seed=args.seed,
+                target_device_label=args.target_device_label,
+                router_assignment_cv_threshold=args.router_assignment_cv_threshold,
+                minimum_grouped_over_dispatch_speedup=args.minimum_grouped_speedup,
             )
         )
         _write_payload(moe_payload, args.report)
+        if args.require_m4_proxy:
+            return 0 if moe_payload["summary"]["m4_moe_proxy_passed"] else 11
         return 0
     if args.command == "compare-smoke":
         from .experiments import (

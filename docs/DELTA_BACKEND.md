@@ -56,9 +56,10 @@ reference. CPU or eager runs can validate the compiler boundary but cannot claim
 optimized backend.
 
 The benchmark matrix reuses the same numerical qualification path for each sequence
-length and records per-shape throughput, speedup and qualification status. It is intended
-as a stable fixture for comparing future Triton, CUDA or Inductor candidates without
-turning local CPU timing into target-hardware evidence.
+length and records per-shape throughput, speedup, stable case IDs, shape roles, target
+evidence flags and qualification-reason aggregates. It is intended as a stable fixture
+for comparing future Triton, CUDA or Inductor candidates without turning local CPU timing
+into target-hardware evidence.
 
 The current candidate compiles `GatedDeltaMemoryEager`, while
 `GatedDeltaMemoryReference` remains the independent oracle. The eager candidate preserves

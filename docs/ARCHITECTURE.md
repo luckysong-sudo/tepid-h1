@@ -38,10 +38,12 @@ must document a transpose if it chooses `[value_dim, key_dim]`.
 
 ## Global sparse slot
 
-The current class is deliberately named `GlobalSparseAttentionReference`. It is a
-full-attention oracle limited to short sequences and must never be used to claim sparse
-speedups. The production contract will expose compressed blocks, recent blocks and
-query-selected blocks separately so their recall and cost can be measured.
+The current class is deliberately named `GlobalSparseAttentionReference`. It uses a
+deterministic sparse causal mask that keeps a recent local window plus fixed-stride global
+anchor positions, retains complete KV history up to `global_reference_max_tokens`, and must
+never be used to claim production sparse-kernel speedups. The production contract will expose
+compressed blocks, recent blocks and query-selected blocks separately so their recall and
+cost can be measured.
 
 ## Streaming state convention
 

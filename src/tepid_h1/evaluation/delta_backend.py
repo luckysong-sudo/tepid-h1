@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import platform
 import time
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from typing import Any, cast
 
@@ -73,6 +74,7 @@ class DeltaBackendBenchmarkConfig:
 
 def benchmark_delta_backend(config: DeltaBackendBenchmarkConfig) -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
+    boundary_lengths = _boundary_sequence_lengths(config.sequence_lengths)
     for index, sequence_length in enumerate(config.sequence_lengths):
         case_report = validate_delta_backend(
             DeltaBackendValidationConfig(
@@ -88,9 +90,19 @@ def benchmark_delta_backend(config: DeltaBackendBenchmarkConfig) -> dict[str, An
         )
         cases.append(
             {
+                "case_id": f"delta-{config.backend}-{config.device}-{config.dtype}-b"
+                f"{config.batch_size}-s{sequence_length}",
                 "sequence_length": sequence_length,
+                "shape_role": _shape_role(sequence_length, boundary_lengths),
+                "batch_size": config.batch_size,
+                "device": config.device,
+                "dtype": config.dtype,
+                "target_device_label": config.target_device_label,
                 "tokens": case_report["timing"]["tokens"],
                 "numerical_passed": case_report["numerical_passed"],
+                "target_hardware_evidence": case_report["qualification"][
+                    "target_hardware_evidence"
+                ],
                 "optimization_qualified": case_report["qualification"]["optimization_qualified"],
                 "candidate_over_reference_speedup": case_report["timing"][
                     "candidate_over_reference_speedup"
@@ -101,17 +113,30 @@ def benchmark_delta_backend(config: DeltaBackendBenchmarkConfig) -> dict[str, An
             }
         )
     speedups = [case["candidate_over_reference_speedup"] for case in cases]
+    qualification_reasons = _count_values(case["qualification_reason"] for case in cases)
     return {
         "schema_version": 1,
         "experiment": "delta_backend_benchmark_matrix",
         "config": asdict(config),
+        "environment": {
+            "device": config.device,
+            "dtype": config.dtype,
+            "target_device_label_declared": config.target_device_label is not None,
+            "sequence_length_min": min(config.sequence_lengths),
+            "sequence_length_max": max(config.sequence_lengths),
+        },
         "cases": cases,
         "summary": {
             "case_count": len(cases),
             "all_numerical_passed": all(case["numerical_passed"] for case in cases),
             "all_optimization_qualified": all(case["optimization_qualified"] for case in cases),
+            "qualified_case_count": sum(1 for case in cases if case["optimization_qualified"]),
+            "target_hardware_case_count": sum(
+                1 for case in cases if case["target_hardware_evidence"]
+            ),
             "min_candidate_over_reference_speedup": min(speedups),
             "max_candidate_over_reference_speedup": max(speedups),
+            "qualification_reasons": qualification_reasons,
         },
         "interpretation": (
             "This matrix is a repeatable benchmark fixture. It records local throughput "
@@ -119,6 +144,35 @@ def benchmark_delta_backend(config: DeltaBackendBenchmarkConfig) -> dict[str, An
             "case also satisfies the target-hardware qualification contract."
         ),
     }
+
+
+def _boundary_sequence_lengths(sequence_lengths: tuple[int, ...]) -> tuple[int, int]:
+    return min(sequence_lengths), max(sequence_lengths)
+
+
+def _shape_role(sequence_length: int, boundaries: tuple[int, int]) -> str:
+    minimum, maximum = boundaries
+    if minimum == maximum:
+        return "single"
+    if sequence_length == minimum:
+        return "minimum"
+    if sequence_length == maximum:
+        return "maximum"
+    return "intermediate"
+
+
+def _count_values(values: Iterable[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def _reset_compile_cache() -> None:
+    dynamo = getattr(torch, "_dynamo", None)
+    reset = getattr(dynamo, "reset", None)
+    if callable(reset):
+        reset()
 
 
 def validate_delta_backend(config: DeltaBackendValidationConfig) -> dict[str, Any]:
@@ -130,6 +184,7 @@ def validate_delta_backend(config: DeltaBackendValidationConfig) -> dict[str, An
     reference = GatedDeltaMemoryReference(model_config).to(device=device, dtype=dtype)
     candidate_layer = GatedDeltaMemoryEager(model_config).to(device=device, dtype=dtype)
     candidate_layer.load_state_dict(reference.state_dict())
+    _reset_compile_cache()
     candidate = cast(
         nn.Module,
         torch.compile(candidate_layer, backend=config.backend, fullgraph=True),
