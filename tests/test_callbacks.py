@@ -212,6 +212,19 @@ class TestTrainingRunner:
         with pytest.raises(RuntimeError, match="model did not return a loss"):
             runner.train_step(input_ids)
 
+    def test_train_step_rejects_non_positive_gradient_norm_before_forward(self) -> None:
+        model = MagicMock()
+        optimizer = MagicMock()
+        runner = TrainingRunner(model, optimizer)
+        input_ids = torch.randint(0, 10, (2, 4))
+
+        with pytest.raises(ValueError, match="max_gradient_norm"):
+            runner.train_step(input_ids, max_gradient_norm=0)
+
+        model.assert_not_called()
+        optimizer.zero_grad.assert_not_called()
+        optimizer.step.assert_not_called()
+
     def test_callbacks_invoked(self) -> None:
         step_calls: list[int] = []
         cb = TrainingCallback(
@@ -295,3 +308,15 @@ class TestTrainingRunner:
         labels = [torch.randint(0, 10, (2, 4)), torch.randint(0, 10, (2, 4))]
         with pytest.raises(ValueError, match="labels_batches must match"):
             runner.train_epoch(batches, labels_batches=labels)
+
+    def test_train_epoch_rejects_empty_batches_before_forward(self) -> None:
+        model = MagicMock()
+        optimizer = MagicMock()
+        runner = TrainingRunner(model, optimizer)
+
+        with pytest.raises(ValueError, match="batches"):
+            runner.train_epoch([])
+
+        model.assert_not_called()
+        optimizer.zero_grad.assert_not_called()
+        optimizer.step.assert_not_called()

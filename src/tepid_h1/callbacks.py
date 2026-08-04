@@ -186,6 +186,8 @@ class TrainingRunner:
         *,
         max_gradient_norm: float = 1.0,
     ) -> dict[str, Any]:
+        if max_gradient_norm <= 0:
+            raise ValueError("max_gradient_norm must be positive")
         self.optimizer.zero_grad(set_to_none=True)
         output = self.model(input_ids, labels=labels)
         if output.loss is None:
@@ -234,6 +236,8 @@ class TrainingRunner:
         *,
         max_gradient_norm: float = 1.0,
     ) -> dict[str, Any]:
+        if not batches:
+            raise ValueError("batches must not be empty")
         if labels_batches is None:
             labels_batches = [None] * len(batches)
         if len(labels_batches) != len(batches):

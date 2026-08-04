@@ -114,6 +114,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "training and evaluation validate supervised target shapes before forward",
             "training and evaluation reject invalid input batch dtype and cardinality "
             "before forward",
+            "callback training runner rejects empty epochs and invalid clipping controls",
             "gradient checkpointing selects layers statically and rejects invalid controls",
             "mixed precision preserves token tensor dtype and restores runtime state safely",
             "checkpoint saving rejects invalid step types and scheduler-step mismatches",
