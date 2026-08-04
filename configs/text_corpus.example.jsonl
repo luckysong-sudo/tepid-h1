@@ -1,0 +1,6 @@
+{"text": "This is a test sentence in English for tokenizer benchmarking.", "domain": "en"}
+{"text": "\u8fd9\u662f\u4e00\u53e5\u4e2d\u6587\u6d4b\u8bd5\u53e5\u5b50\uff0c\u7528\u4e8e tokenizer \u57fa\u51c6\u6d4b\u8bd5\u3002", "domain": "zh"}
+{"text": "def hello(): print(\"world\")", "domain": "code"}
+{"text": "The quick brown fox jumps over the lazy dog.", "domain": "en"}
+{"text": "\u673a\u5668\u5b66\u4e60\u662f\u4eba\u5de5\u667a\u80fd\u7684\u4e00\u4e2a\u5206\u652f\u3002", "domain": "zh"}
+{"text": "x = y + z", "domain": "code"}
