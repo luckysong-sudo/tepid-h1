@@ -164,7 +164,6 @@ def _quantize_int8(
         scales = flat.abs().amax(dim=-1).clamp(min=1e-12) / 127.0
         zeros = None
     else:
-        scale_min: float = 0.0
         scale_max: float = 255.0
         fmin = flat.amin(dim=-1)
         fmax = flat.amax(dim=-1)
@@ -201,7 +200,6 @@ def _quantize_int4(
         scales = flat.abs().amax(dim=-1).clamp(min=1e-12) / 7.0
         zeros = None
     else:
-        scale_min: float = 0.0
         scale_max: float = 15.0
         fmin = flat.amin(dim=-1)
         fmax = flat.amax(dim=-1)
