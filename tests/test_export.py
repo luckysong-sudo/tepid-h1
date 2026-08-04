@@ -213,6 +213,32 @@ class TestModelExporter:
 
         assert not output_path.parent.exists()
 
+    @pytest.mark.parametrize(
+        "opset_version, expected_error",
+        [
+            (0, "opset_version must be positive"),
+            (True, "opset_version must be an integer"),
+        ],
+    )
+    def test_onnx_rejects_invalid_opset_before_export(
+        self,
+        exporter: ModelExporter,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        opset_version: int,
+        expected_error: str,
+    ) -> None:
+        def fail_export(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("torch.onnx.export should not run for invalid opset_version")
+
+        monkeypatch.setattr(torch.onnx, "export", fail_export)
+        output_path = tmp_path / "nested" / "model.onnx"
+
+        with pytest.raises(ValueError, match=expected_error):
+            exporter.export_onnx(output_path, input_shape=(1, 8), opset_version=opset_version)
+
+        assert not output_path.parent.exists()
+
     @pytest.mark.skip(reason="TorchScript not supported for keyword-only args in Python 3.14+")
     def test_export_directory_creation(self, exporter: ModelExporter, tmp_path: Path) -> None:
         output_path = tmp_path / "nested" / "dir" / "model.pt"

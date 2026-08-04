@@ -66,6 +66,7 @@ class ModelExporter:
             Path to the exported model.
         """
         validated_input_shape = _validate_onnx_input_shape(input_shape)
+        validated_opset_version = _validate_onnx_opset_version(opset_version)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.model.eval()
@@ -75,7 +76,7 @@ class ModelExporter:
             self.model,
             (dummy_input,),
             str(output_path),
-            opset_version=opset_version,
+            opset_version=validated_opset_version,
             input_names=["input_ids"],
             output_names=["logits"],
             dynamic_axes={
@@ -197,6 +198,14 @@ def _validate_onnx_input_shape(input_shape: tuple[int, ...]) -> tuple[int, int]:
             raise ValueError(f"input_shape {name} must be positive")
 
     return batch_size, sequence_length
+
+
+def _validate_onnx_opset_version(opset_version: int) -> int:
+    if not isinstance(opset_version, int) or isinstance(opset_version, bool):
+        raise ValueError("opset_version must be an integer")
+    if opset_version <= 0:
+        raise ValueError("opset_version must be positive")
+    return opset_version
 
 
 def _export_config_payload(config: Any) -> dict[str, Any]:
