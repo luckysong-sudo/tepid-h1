@@ -26,6 +26,7 @@ class RoutedMoEBenchmarkTests(unittest.TestCase):
         self.assertEqual(report["experiment"], "routed_moe_benchmark_matrix")
         self.assertEqual(report["environment"]["device_type"], "cpu")
         self.assertEqual(report["environment"]["dtype"], "float32")
+        self.assertEqual(report["environment"]["cuda_available"], False)
         self.assertFalse(report["environment"]["target_device_label_declared"])
         self.assertEqual(report["environment"]["sequence_length_min"], 2)
         self.assertEqual(report["environment"]["sequence_length_max"], 3)

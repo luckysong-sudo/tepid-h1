@@ -52,6 +52,13 @@ from .modeling import (
 from .modeling.cache import AttentionCache
 from .project_status import ProjectStatusReport, StatusDimension, build_project_status_report
 from .quantization import QuantizationConfig
+from .training_improvements import (
+    TrainingImprovement,
+    count_training_improvements,
+    filter_training_improvements,
+    get_training_improvement_ids,
+    list_training_improvements,
+)
 from .stage_gates import StageGate, StageGateReport, audit_stage_gates, load_stage_gates
 
 __all__ = [
@@ -114,11 +121,16 @@ __all__ = [
     "baseline_parameter_estimate",
     "build_project_status_report",
     "comparison_report",
+    "count_training_improvements",
     "estimate_memory_savings",
+    "filter_training_improvements",
+    "get_training_improvement_ids",
     "hybrid_parameter_estimate",
+    "list_training_improvements",
     "load_stage_gates",
     "log_training_step",
     "setup_logging",
+    "TrainingImprovement",
     "wrap_layers_with_checkpointing",
 ]
 __version__ = "0.2.0"

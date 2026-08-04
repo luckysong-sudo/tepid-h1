@@ -205,6 +205,7 @@ def benchmark_routed_moe(config: RoutedMoEBenchmarkConfig) -> dict[str, Any]:
         },
         "environment": {
             **_environment(device, dtype),
+            "cuda_available": device.type == "cuda",
             "target_device_label_declared": config.target_device_label is not None,
             "sequence_length_min": min(config.sequence_lengths),
             "sequence_length_max": max(config.sequence_lengths),
@@ -402,6 +403,8 @@ def _benchmark_callable(
     device: torch.device,
 ) -> dict[str, float | int]:
     with torch.no_grad():
+        for _ in range(max(1, iterations // 2)):
+            function(input_tensor)
         function(input_tensor)
     _synchronize(device)
 

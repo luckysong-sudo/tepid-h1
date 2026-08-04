@@ -95,6 +95,7 @@ def _validate_delta_int(name: str, value: int) -> int:
 
 
 def benchmark_delta_backend(config: DeltaBackendBenchmarkConfig) -> dict[str, Any]:
+    is_cuda = config.device == "cuda"
     cases: list[dict[str, Any]] = []
     boundary_lengths = _boundary_sequence_lengths(config.sequence_lengths)
     for index, sequence_length in enumerate(config.sequence_lengths):
@@ -143,6 +144,7 @@ def benchmark_delta_backend(config: DeltaBackendBenchmarkConfig) -> dict[str, An
         "environment": {
             "device": config.device,
             "dtype": config.dtype,
+            "cuda_available": is_cuda,
             "target_device_label_declared": config.target_device_label is not None,
             "sequence_length_min": min(config.sequence_lengths),
             "sequence_length_max": max(config.sequence_lengths),
@@ -163,7 +165,8 @@ def benchmark_delta_backend(config: DeltaBackendBenchmarkConfig) -> dict[str, An
         "interpretation": (
             "This matrix is a repeatable benchmark fixture. It records local throughput "
             "signals across shapes but does not qualify an optimized backend unless each "
-            "case also satisfies the target-hardware qualification contract."
+            "case also satisfies the target-hardware qualification contract. "
+            "CUDA cases include warmup iterations to reduce JIT compilation variance."
         ),
     }
 
@@ -416,6 +419,9 @@ def _benchmark_pair(
     reference.eval()
     candidate.eval()
     with torch.no_grad():
+        for _ in range(max(1, iterations // 2)):
+            reference(input_tensor, initial_state)
+            candidate(input_tensor, initial_state)
         reference(input_tensor, initial_state)
         candidate(input_tensor, initial_state)
     _synchronize(device)

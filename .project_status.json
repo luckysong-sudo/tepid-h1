@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "prototype_scope": "M0-M2 executable prototype, not production 28B training",
+  "prototype_overall_percent": 81,
+  "formal_training_overall_percent": 38,
+  "dimensions": [
+    {
+      "name": "engineering_quality",
+      "percent": 92,
+      "evidence": [
+        "pytest, Ruff, flake8 and mypy are clean locally",
+        "version metadata and tracked-artifact hygiene have regression tests",
+        "CLI command inventory and key JSON schemas have contract tests",
+        "GPU preflight readiness exit codes are covered by CLI contract tests",
+        "top-level and subpackage public APIs have snapshot tests",
+        "CI has blocking test, lint and type-check gates"
+      ],
+      "gaps": [
+        "CI matrix results still need to be observed after merge"
+      ]
+    },
+    {
+      "name": "reference_architecture",
+      "percent": 79,
+      "evidence": [
+        "macro-block config, Delta, GQA, MoE and matched baseline are implemented",
+        "streaming/chunking state contracts have unit coverage",
+        "global sparse attention now uses deterministic local-window plus global-anchor sparsity",
+        "model recurrent state inputs fail closed when Delta or attention state counts do not match the layer plan",
+        "model input token IDs fail closed on dtype, sequence length and vocab range"
+      ],
+      "gaps": [
+        "reference sparse attention is not yet a production fused kernel",
+        "Delta and MoE reference operators are not scale-ready production kernels"
+      ]
+    },
+    {
+      "name": "data_governance",
+      "percent": 84,
+      "evidence": [
+        "data inventory audit, decontamination and corpus split checks exist",
+        "tokenizer benchmark and paired-corpus statistics are machine-readable",
+        "data lineage tracker records root sources and multi-hop transformations",
+        "lineage tracker validates input registration and rejects duplicate sources",
+        "lineage reports expose root source IDs, chain length and cycle detection errors",
+        "license compatibility checker validates sources against usage context matrix",
+        "license compatibility covers permissive, public domain, contracted, restricted, prohibited and unknown categories",
+        "lineage and license compatibility tools have comprehensive unit test coverage"
+      ],
+      "gaps": [
+        "real governed corpora remain outside the repository fixture set",
+        "long-term data lineage evidence must be kept current per run"
+      ]
+    },
+    {
+      "name": "training_and_evaluation",
+      "percent": 95,
+      "evidence": [
+        "smoke training, checkpoint resume and validation contracts are implemented",
+        "retrieval generation/scoring and paired baseline reports are covered",
+        "paired smoke experiments report held-out probe loss and perplexity changes",
+        "MoE router load-balancing auxiliary loss is integrated into CausalLM training",
+        "streaming train/eval calls reject incomplete recurrent state tuples",
+        "causal-LM loss validates label dtype, ignore index and vocab range before training",
+        "autoregressive inference respects explicit greedy versus sampling mode",
+        "repetition penalty uses generated-token history during autoregressive decoding",
+        "top-k and nucleus sampling filters handle vocabulary-index boundaries correctly",
+        "autoregressive sampling suppresses pad tokens while preserving eos stop tokens",
+        "batched generation masks rows that have already emitted eos",
+        "generation validates and applies configured device and dtype backends",
+        "generation samples the first new token from prompt prefill logits",
+        "nucleus sampling keeps the minimum token set that crosses the top-p threshold",
+        "sampling applies temperature before top-k and nucleus filtering",
+        "generation validates special token IDs against the model vocabulary",
+        "generation configuration rejects ambiguous control-value types",
+        "compute-matched baseline validates token inputs and attention-state counts",
+        "evaluation supports masked labels and weights loss by valid target tokens",
+        "training rejects batches without supervised target tokens before forward",
+        "training and evaluation validate supervised target shapes before forward",
+        "training and evaluation reject invalid input batch dtype and cardinality before forward",
+        "callback training runner rejects empty epochs and invalid clipping controls",
+        "gradient checkpointing selects layers statically and rejects invalid controls",
+        "mixed precision preserves token tensor dtype and restores runtime state safely",
+        "checkpoint saving rejects invalid step types and scheduler-step mismatches",
+        "checkpoint loading rejects scheduler mismatches before mutating model state",
+        "checkpoint loading validates metadata and CPU/CUDA RNG payloads before state restore",
+        "paired smoke configuration rejects ambiguous and non-finite training controls",
+        "generation keyword overrides are applied by explicit presence, not default values",
+        "generation validates prompt shape, dtype and token range before model execution",
+        "generation rejects context lengths beyond model and reference-kernel limits",
+        "generation sampling controls reject boolean, non-numeric and non-finite values",
+        "attention cache loading and updates validate tensor shape, length and dtype"
+      ],
+      "gaps": [
+        "no decision-grade long-window model quality experiment exists yet",
+        "current training evidence is smoke-scale only"
+      ]
+    },
+    {
+      "name": "training_improvements",
+      "percent": 100,
+      "evidence": [
+        "training rejects batches without supervised target tokens before forward",
+        "training and evaluation validate supervised target shapes before forward",
+        "training and evaluation reject invalid input batch dtype and cardinality before forward",
+        "callback training runner rejects empty epochs and invalid clipping controls",
+        "gradient checkpointing selects layers statically and rejects invalid controls",
+        "mixed precision preserves token tensor dtype and restores runtime state safely",
+        "checkpoint saving rejects invalid step types and scheduler-step mismatches",
+        "checkpoint loading rejects scheduler mismatches before mutating model state",
+        "checkpoint loading validates metadata and CPU/CUDA RNG payloads before state restore",
+        "paired smoke configuration rejects ambiguous and non-finite training controls",
+        "training improvement records are machine-readable and exported from the package",
+        "training improvement IDs are unique and covered by comprehensive unit tests"
+      ],
+      "gaps": [
+        "training improvements are evidence records; they do not replace production training quality experiments"
+      ]
+    },
+    {
+      "name": "backend_performance",
+      "percent": 64,
+      "evidence": [
+        "Delta backend validation compares forward, state and gradients",
+        "Delta benchmark matrix reports shape-level throughput and qualification status",
+        "Delta backend configs reject ambiguous integer controls before execution",
+        "Delta benchmark cases now include stable shape roles, target-evidence flags and qualification-reason aggregates",
+        "MoE benchmark matrix reports routing load, oracle parity and grouped throughput",
+        "MoE benchmark configs reject ambiguous integer controls before execution",
+        "MoE benchmark cases now include stable shape roles and target-evidence flags",
+        "MoE benchmark reports expert-assignment coefficient of variation for load balance tracking",
+        "MoE benchmark binds the M4 router CV threshold into machine-readable output",
+        "MoE benchmark reports router CV pass/fail reasons for auditability",
+        "MoE benchmark summary identifies the worst router-CV case for follow-up",
+        "MoE benchmark binds a grouped-over-dispatch speedup threshold and worst-case speedup locator into reports",
+        "MoE benchmark emits M4 proxy blockers across parity, target evidence, speedup and router balance",
+        "eager Delta and native GQA reduce some reference overhead",
+        "global sparse attention uses a sparse causal pattern in the reference path",
+        "MoE routed experts use grouped selected-expert matmuls instead of per-expert token dispatch",
+        "MoE router balance is exposed as a differentiable training signal",
+        "quantized linear layers store quantized weights with recoverable INT8, INT4, NF4 and FP8 dequantization contracts",
+        "saved quantized artifacts load through schema-checked layer reconstruction",
+        "quantized layer application validates targets before mutating model weights",
+        "quantization config normalizes modes and rejects unsupported axes",
+        "quantized artifact loading rejects incompatible tensor dtypes and metadata shapes",
+        "quantized size estimates honor the same explicit skip-layer contract as export",
+        "sparse attention memory estimator quantifies KV savings across sequence lengths",
+        "sparse block structure descriptor documents compressed, recent and query-selected block contracts",
+        "sparse analysis tools reject invalid inputs and produce machine-readable reports"
+      ],
+      "gaps": [
+        "Triton/CUDA/Inductor optimized Delta, NSA and MoE kernels are not complete",
+        "target-hardware positive speedup is not yet established"
+      ]
+    },
+    {
+      "name": "zerogpu_and_operations",
+      "percent": 72,
+      "evidence": [
+        "ZeroGPU bundle, adapter limits and persisted evidence are documented",
+        "remote quality gate path exists for bounded validation",
+        "local GPU preflight reports host GPU, PyTorch CUDA readiness and next actions",
+        "local GPU validation plan enumerates CUDA benchmark commands after enablement",
+        "local GPU preflight warns when VRAM only supports smoke/operator checks",
+        "local GPU operator-memory threshold is configurable in preflight reports",
+        "local GPU preflight separates operator and scale-training memory thresholds",
+        "local GPU preflight rejects ambiguous memory-threshold controls",
+        "local GPU readiness separates CUDA runtime, smoke checks and scale training"
+      ],
+      "gaps": [
+        "operations remain tied to Space quota and external Hugging Face state",
+        "local CUDA PyTorch runtime still needs enablement on this host"
+      ]
+    },
+    {
+      "name": "agent_runtime",
+      "percent": 72,
+      "evidence": [
+        "policy, tool, verifier, telemetry and conversation defaults are implemented",
+        "runtime protocol validation and failure handling have tests",
+        "runtime retry and step-budget controls reject ambiguous and non-finite values",
+        "RateLimitPolicy enforces per-tool call limits with optional inner policy wrapping",
+        "CompositePolicy chains multiple policies with first-deny short-circuit semantics",
+        "ToolSchemaValidator enforces required-argument contracts before tool execution",
+        "ContentLengthVerifier guards against degenerate empty or overly long final answers",
+        "ListTelemetry summary reports tool call, final answer and failure counts for audit",
+        "policy and verifier extensions have comprehensive unit test coverage"
+      ],
+      "gaps": [
+        "runtime is not yet bound to a trained agent-capable model",
+        "credentials, permissions and long-term memory remain external by design"
+      ]
+    },
+    {
+      "name": "documentation_and_release_readiness",
+      "percent": 76,
+      "evidence": [
+        "architecture, training, governance, retrieval and roadmap docs exist",
+        "stage-gate and project-hygiene checks are now machine-readable",
+        "stage-gate audit validates per-gate evidence references for release tracking",
+        "stage-gate CLI evidence references are parser-validated without executing gates",
+        "top-level and subpackage public API exports are protected by snapshot tests",
+        "public API reference documents the stable top-level and subpackage exports",
+        "inference export rejects unsupported formats instead of silently skipping them",
+        "inference export rejects empty format lists before creating output directories",
+        "ONNX export validates dummy input shape before invoking the exporter",
+        "ONNX export validates opset version before invoking the exporter",
+        "export metadata cannot override model configuration keys",
+        "SafeTensors export writes a real safetensors file instead of a torch pickle"
+      ],
+      "gaps": [
+        "release packaging and user-facing examples need hardening"
+      ]
+    }
+  ],
+  "interpretation": "Tepid-H1 is substantially complete as an executable correctness and governance prototype. The dominant blocker to formal training readiness is optimized backend and target-hardware evidence, not basic project structure."
+}

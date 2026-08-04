@@ -240,6 +240,12 @@ def build_parser() -> argparse.ArgumentParser:
     moe_benchmark.add_argument("--minimum-grouped-speedup", type=float, default=1.0)
     moe_benchmark.add_argument("--require-m4-proxy", action="store_true")
     moe_benchmark.add_argument("--report", type=Path)
+    training_improve = subparsers.add_parser(
+        "training-improve",
+        help="print machine-readable training improvement evidence records",
+    )
+    training_improve.add_argument("--category", type=str, default=None)
+    training_improve.add_argument("--report", type=Path)
     corpus_stats = subparsers.add_parser(
         "corpus-stats",
         help="summarize a governed paired-corpus JSONL file",
@@ -762,6 +768,25 @@ def main() -> int:
         _write_payload(moe_payload, args.report)
         if args.require_m4_proxy:
             return 0 if moe_payload["summary"]["m4_moe_proxy_passed"] else 11
+        return 0
+    if args.command == "training-improve":
+        from .training_improvements import (
+            TRAINING_IMPROVEMENTS,
+            filter_training_improvements,
+        )
+
+        if args.category:
+            records = filter_training_improvements(TRAINING_IMPROVEMENTS, category=args.category)
+        else:
+            records = tuple(TRAINING_IMPROVEMENTS)
+        training_improve_payload: dict[str, Any] = {
+            "schema_version": 1,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "count": len(records),
+            "category_filter": args.category,
+            "improvements": [record.to_dict() for record in records],
+        }
+        _write_payload(training_improve_payload, args.report)
         return 0
     if args.command == "compare-smoke":
         from .experiments import (

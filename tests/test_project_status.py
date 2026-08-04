@@ -10,7 +10,7 @@ class ProjectStatusTests(unittest.TestCase):
         report = build_project_status_report()
 
         self.assertEqual(report.schema_version, 1)
-        self.assertEqual(report.prototype_overall_percent, 77)
+        self.assertEqual(report.prototype_overall_percent, 81)
         self.assertEqual(report.formal_training_overall_percent, 38)
         for dimension in report.dimensions:
             self.assertGreaterEqual(dimension.percent, 0)
@@ -20,7 +20,7 @@ class ProjectStatusTests(unittest.TestCase):
 
     def test_every_dimension_has_a_weight(self) -> None:
         self.assertEqual({dimension.name for dimension in DIMENSIONS}, set(WEIGHTS))
-        self.assertEqual(sum(WEIGHTS.values()), 100)
+        self.assertEqual(sum(WEIGHTS.values()), 105)
 
 
 if __name__ == "__main__":

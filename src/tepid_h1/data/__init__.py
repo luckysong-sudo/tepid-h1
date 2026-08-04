@@ -10,6 +10,13 @@ from .decontamination import (
     load_text_records,
     normalize_text,
 )
+from .lineage import (
+    LicenseCompatibilityReport,
+    LineageEntry,
+    LineageReport,
+    LineageTracker,
+    check_license_compatibility,
+)
 from .stats import (
     CorpusStats,
     SplitIsolationReport,
@@ -34,10 +41,15 @@ __all__ = [
     "CorpusStats",
     "DecontaminationReport",
     "DomainMetrics",
+    "LicenseCompatibilityReport",
+    "LineageEntry",
+    "LineageReport",
+    "LineageTracker",
     "SplitIsolationReport",
     "TextRecord",
     "audit_inventory",
     "benchmark_candidate",
+    "check_license_compatibility",
     "check_paired_corpus_isolation",
     "character_ngrams",
     "compare_corpora",

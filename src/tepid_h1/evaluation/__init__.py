@@ -15,14 +15,24 @@ from .retrieval import (
     score_retrieval,
     write_retrieval_suite,
 )
+from .sparse_analysis import (
+    SparseAttentionProfile,
+    SparseAttentionReport,
+    describe_sparse_block_structure,
+    estimate_sparse_attention_memory,
+)
 
 __all__ = [
     "DeltaBackendBenchmarkConfig",
     "DeltaBackendValidationConfig",
     "RetrievalCase",
     "RoutedMoEBenchmarkConfig",
+    "SparseAttentionProfile",
+    "SparseAttentionReport",
     "benchmark_delta_backend",
     "benchmark_routed_moe",
+    "describe_sparse_block_structure",
+    "estimate_sparse_attention_memory",
     "generate_retrieval_suite",
     "load_answer_key",
     "load_predictions",

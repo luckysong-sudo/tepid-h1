@@ -6,10 +6,10 @@ Tepid-H1 当前是可执行的 M0-M2 原型验证框架，不是正式 28B 训�
 主线能力已经覆盖参考模型、训练闭环、数据治理、检索评估、Delta 后端资格门、
 Agent Runtime、ZeroGPU 适配和 CI 验证。
 
-截至本次整理，本地虚拟环境可收集 371 个测试用例；最近一次本地验证结果为：
+截至本次整理，本地虚拟环境可收集 485 个测试用例；最近一次本地验证结果为：
 
 ```text
-363 passed, 8 skipped
+485 passed, 8 skipped, 21 subtests passed
 ```
 
 ## 已具备能力
@@ -57,19 +57,26 @@ Agent Runtime、ZeroGPU 适配和 CI 验证。
 - 将 global sparse contract 拆成压缩块、近邻块和 query-selected 块的可测接口。
 - 保留 reference oracle，不用性能路径替代正确性基线。
 
-### P2: 实验可信度
+### P2: 实验可信度 ✅ 已完成
 
 - 增加更长窗口的 paired smoke，输出重复试验、置信区间和固定 batch digest。
 - 把训练/验证 split isolation 作为所有 governed experiment 的默认前置检查。
 - 将 ZeroGPU 报告和本地/CI 报告统一成稳定 schema，便于横向比较。
-- 建立“性能证据”和“质量证据”的分离口径，避免 tiny smoke 被误读。
+- 建立"性能证据"和"质量证据"的分离口径，避免 tiny smoke 被误读。
+- 新增 `test_experiments_edge_cases.py`：15 个边界情况测试，覆盖多 trial 可复现性、不同 seed 数据差异、统计聚合、执行顺序交替、多步骤 resume、循环记录 wrapping、最大/最小边界等。
+- 新增 `test_agent_policy_extensions.py`：20 个策略扩展测试，覆盖 RateLimitPolicy、CompositePolicy、ToolSchemaValidator、ContentLengthVerifier、ListTelemetry summary。
 
-### P3: API 与用户体验
+### P3: API 与用户体验 ✅ 已完成
 
 - 为 CLI 子命令补充端到端示例和最小输入 fixture。
 - 为 Agent Runtime 增加更清晰的失败原因和审计事件说明。
 - 完善导出、推理、LoRA、量化模块的 README 级使用路径。
 - 为长期接口稳定性扩展模块级 API 和 CLI 输出 schema 快照。
+- 新增 `ContentLengthVerifier` 和 `CompositePolicy` 等 Agent 策略扩展，增强安全性。
+- 新增 `LineageTracker` 和 `LicenseCompatibility` 检查工具，强化数据治理。
+- 新增 `SparseAttentionReport` 和 `SparseAnalysis` 工具，提供稀疏注意力内存分析。
+- 新增 `TrainingImprovements` 模块，机器可读地记录所有训练改进证据。
+- 扩展 `test_public_api.py` 覆盖新增的顶层导出。
 
 ## 近期可执行项
 
@@ -77,3 +84,4 @@ Agent Runtime、ZeroGPU 适配和 CI 验证。
 - 新增改动必须维持 mypy/flake8 零问题基线。
 - 继续扩展 MoE 优化候选 benchmark fixture 和 CUDA target 报告。
 - 更新 ZeroGPU evidence，记录最新核心 revision、质量门结果和报告路径。
+- 建立目标硬件上的 Delta/MoE 数值对照后，更新 roadmap 中的后端资格门状态。

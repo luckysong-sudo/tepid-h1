@@ -73,11 +73,16 @@ integration code that should not need to know the internal package layout.
 - `baseline_parameter_estimate` - estimates matched baseline parameter count.
 - `build_project_status_report` - builds the completion-status payload.
 - `comparison_report` - compares Tepid-H1 and baseline parameter estimates.
+- `count_training_improvements` - returns the number of registered training improvements.
 - `estimate_memory_savings` - estimates checkpointing memory savings.
+- `filter_training_improvements` - filters training improvements by category.
+- `get_training_improvement_ids` - returns the machine-readable improvement IDs.
 - `hybrid_parameter_estimate` - estimates Tepid-H1 hybrid parameter count.
+- `list_training_improvements` - returns all registered training improvement records.
 - `load_stage_gates` - loads stage-gate JSON configuration.
 - `log_training_step` - writes structured training log events.
 - `setup_logging` - configures project logging.
+- `TrainingImprovement` - machine-readable training improvement record.
 - `wrap_layers_with_checkpointing` - wraps a sequence of layers for checkpointing.
 
 ## `tepid_h1.agent`
@@ -89,11 +94,14 @@ policy decisions, tool execution and evidence verification separate.
 - `AgentRuntime` - bounded tool-use runtime.
 - `AllowlistPolicy` - tool allowlist policy implementation.
 - `BudgetExceeded` - runtime budget exhaustion error.
+- `CompositePolicy` - AND-combined policy allowing when all sub-policies pass.
+- `ContentLengthVerifier` - enforces output length within a configured range.
 - `EvidenceVerifier` - minimal evidence verifier.
 - `FinalAnswer` - terminal answer action.
 - `ListTelemetry` - list-backed telemetry sink.
 - `ModelValidationError` - model-output validation error.
 - `PolicyDecision` - allow/deny policy result.
+- `RateLimitPolicy` - rate-limits agent tool calls to a fixed window.
 - `RetryExhausted` - retry exhaustion error.
 - `RuntimeDependencies` - runtime dependency bundle.
 - `RuntimeState` - runtime state record.
@@ -101,6 +109,7 @@ policy decisions, tool execution and evidence verification separate.
 - `ToolCall` - model-requested tool invocation.
 - `ToolRegistry` - callable tool registry.
 - `ToolResult` - tool result payload.
+- `ToolSchemaValidator` - validates tool call arguments against a schema.
 
 ## `tepid_h1.data`
 
@@ -114,10 +123,15 @@ and corpus statistics.
 - `CorpusStats` - paired-corpus summary statistics.
 - `DecontaminationReport` - decontamination comparison result.
 - `DomainMetrics` - tokenizer metrics by domain.
+- `LicenseCompatibilityReport` - license compatibility assessment result.
+- `LineageEntry` - single lineage transformation record.
+- `LineageReport` - full source-to-split lineage report.
+- `LineageTracker` - tracks source and transformation lineage for governed corpora.
 - `SplitIsolationReport` - paired split isolation result.
 - `TextRecord` - normalized text record.
 - `audit_inventory` - validates a governed inventory file.
 - `benchmark_candidate` - evaluates a tokenizer candidate.
+- `check_license_compatibility` - validates that source licenses permit the intended usage context.
 - `check_paired_corpus_isolation` - detects overlap across paired splits.
 - `character_ngrams` - builds character n-grams.
 - `compare_corpora` - compares training and benchmark corpora for contamination.
@@ -139,8 +153,12 @@ validation and benchmark protocols.
 - `DeltaBackendValidationConfig` - Delta validation configuration.
 - `RetrievalCase` - retrieval evaluation case.
 - `RoutedMoEBenchmarkConfig` - MoE benchmark configuration.
+- `SparseAttentionProfile` - per-sequence sparse attention memory profile.
+- `SparseAttentionReport` - report over all sequence-length profiles.
 - `benchmark_delta_backend` - records Delta backend throughput evidence.
 - `benchmark_routed_moe` - records reference MoE routing-load evidence.
+- `describe_sparse_block_structure` - describes compressed sparse attention block layout.
+- `estimate_sparse_attention_memory` - estimates memory usage across sequence lengths.
 - `generate_retrieval_suite` - creates retrieval evaluation cases.
 - `load_answer_key` - loads retrieval answer keys.
 - `load_predictions` - loads retrieval predictions.

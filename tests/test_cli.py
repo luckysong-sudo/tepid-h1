@@ -23,6 +23,7 @@ EXPECTED_SUBCOMMANDS = [
     "stage-gates",
     "tokenizer-benchmark",
     "train-smoke",
+    "training-improve",
 ]
 
 
@@ -343,9 +344,9 @@ class CLIIntegrationTests(unittest.TestCase):
                 "interpretation",
             },
         )
-        self.assertEqual(report["prototype_overall_percent"], 77)
+        self.assertEqual(report["prototype_overall_percent"], 81)
         self.assertEqual(report["formal_training_overall_percent"], 38)
-        self.assertEqual(len(report["dimensions"]), 8)
+        self.assertEqual(len(report["dimensions"]), 9)
         self.assertEqual(
             set(report["dimensions"][0]),
             {"name", "percent", "evidence", "gaps"},
@@ -455,6 +456,42 @@ class CLIIntegrationTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertFalse(output["summary"]["m4_moe_proxy_passed"])
+
+    def test_training_improve_command(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        with patch.object(sys, "argv", ["tepid-h1", "training-improve"]):
+            with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                result = main()
+                output = json.loads(mock_stdout.getvalue())
+
+        self.assertEqual(result, 0)
+        self.assertEqual(output["schema_version"], 1)
+        self.assertEqual(output["category_filter"], None)
+        self.assertGreater(output["count"], 0)
+        self.assertIsInstance(output["improvements"], list)
+
+    def test_training_improve_command_with_category_filter(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        with patch.object(sys, "argv", ["tepid-h1", "training-improve", "--category", "training"]):
+            with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                result = main()
+                output = json.loads(mock_stdout.getvalue())
+
+        self.assertEqual(result, 0)
+        self.assertEqual(output["category_filter"], "training")
+        self.assertGreater(output["count"], 0)
+        for record in output["improvements"]:
+            self.assertEqual(record["category"], "training")
 
     def test_moe_benchmark_require_m4_proxy_returns_nonzero_when_blocked(self):
         import sys

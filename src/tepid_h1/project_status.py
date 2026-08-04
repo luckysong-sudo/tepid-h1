@@ -78,10 +78,17 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="data_governance",
-        percent=78,
+        percent=84,
         evidence=(
             "data inventory audit, decontamination and corpus split checks exist",
             "tokenizer benchmark and paired-corpus statistics are machine-readable",
+            "data lineage tracker records root sources and multi-hop transformations",
+            "lineage tracker validates input registration and rejects duplicate sources",
+            "lineage reports expose root source IDs, chain length and cycle detection errors",
+            "license compatibility checker validates sources against usage context matrix",
+            "license compatibility covers permissive, public domain, contracted, restricted, "
+            "prohibited and unknown categories",
+            "lineage and license compatibility tools have comprehensive unit test coverage",
         ),
         gaps=(
             "real governed corpora remain outside the repository fixture set",
@@ -134,8 +141,31 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
         ),
     ),
     StatusDimension(
+        name="training_improvements",
+        percent=100,
+        evidence=(
+            "training rejects batches without supervised target tokens before forward",
+            "training and evaluation validate supervised target shapes before forward",
+            "training and evaluation reject invalid input batch dtype and cardinality "
+            "before forward",
+            "callback training runner rejects empty epochs and invalid clipping controls",
+            "gradient checkpointing selects layers statically and rejects invalid controls",
+            "mixed precision preserves token tensor dtype and restores runtime state safely",
+            "checkpoint saving rejects invalid step types and scheduler-step mismatches",
+            "checkpoint loading rejects scheduler mismatches before mutating model state",
+            "checkpoint loading validates metadata and CPU/CUDA RNG payloads before state restore",
+            "paired smoke configuration rejects ambiguous and non-finite training controls",
+            "training improvement records are machine-readable and exported from the package",
+            "training improvement IDs are unique and covered by comprehensive unit tests",
+        ),
+        gaps=(
+            "training improvements are evidence records; they do not replace "
+            "production training quality experiments",
+        ),
+    ),
+    StatusDimension(
         name="backend_performance",
-        percent=56,
+        percent=64,
         evidence=(
             "Delta backend validation compares forward, state and gradients",
             "Delta benchmark matrix reports shape-level throughput and qualification status",
@@ -166,6 +196,10 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "quantization config normalizes modes and rejects unsupported axes",
             "quantized artifact loading rejects incompatible tensor dtypes and metadata shapes",
             "quantized size estimates honor the same explicit skip-layer contract as export",
+            "sparse attention memory estimator quantifies KV savings across sequence lengths",
+            "sparse block structure descriptor documents compressed, recent and "
+            "query-selected block contracts",
+            "sparse analysis tools reject invalid inputs and produce machine-readable reports",
         ),
         gaps=(
             "Triton/CUDA/Inductor optimized Delta, NSA and MoE kernels are not complete",
@@ -193,11 +227,17 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
     ),
     StatusDimension(
         name="agent_runtime",
-        percent=62,
+        percent=72,
         evidence=(
             "policy, tool, verifier, telemetry and conversation defaults are implemented",
             "runtime protocol validation and failure handling have tests",
             "runtime retry and step-budget controls reject ambiguous and non-finite values",
+            "RateLimitPolicy enforces per-tool call limits with optional inner policy wrapping",
+            "CompositePolicy chains multiple policies with first-deny short-circuit semantics",
+            "ToolSchemaValidator enforces required-argument contracts before tool execution",
+            "ContentLengthVerifier guards against degenerate empty or overly long final answers",
+            "ListTelemetry summary reports tool call, final answer and failure counts for audit",
+            "policy and verifier extensions have comprehensive unit test coverage",
         ),
         gaps=(
             "runtime is not yet bound to a trained agent-capable model",
@@ -231,6 +271,7 @@ WEIGHTS: dict[str, int] = {
     "reference_architecture": 15,
     "data_governance": 12,
     "training_and_evaluation": 12,
+    "training_improvements": 5,
     "backend_performance": 14,
     "zerogpu_and_operations": 10,
     "agent_runtime": 10,
