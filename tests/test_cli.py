@@ -263,8 +263,9 @@ class CLIIntegrationTests(unittest.TestCase):
         self.assertEqual(len(report["gates"]), 6)
         self.assertEqual(
             set(report["gates"][0]),
-            {"name", "deliverables", "exit_criteria"},
+            {"name", "deliverables", "exit_criteria", "evidence_refs"},
         )
+        self.assertTrue(report["gates"][4]["evidence_refs"])
 
     def test_project_status_command_outputs_json(self):
         import sys

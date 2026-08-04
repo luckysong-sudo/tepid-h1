@@ -8,6 +8,12 @@
     "exit_criteria": [
       "tokenizer selected on zh/en/code compression and throughput",
       "commercial-use rights recorded for every material source"
+    ],
+    "evidence_refs": [
+      "file:docs/M0_DATA_GOVERNANCE.md",
+      "file:configs/data_inventory.example.json",
+      "file:configs/decontamination_benchmark.example.jsonl",
+      "cli:tepid-h1 data-audit configs/data_inventory.example.json"
     ]
   },
   "M1_350m_prototype": {
@@ -20,6 +26,12 @@
       "no unexplained NaN/Inf on long sequences",
       "chunkwise and recurrent outputs meet declared tolerance",
       "quality is not worse than baseline by more than 2 percent"
+    ],
+    "evidence_refs": [
+      "file:docs/DELTA_BACKEND.md",
+      "file:docs/RETRIEVAL_EVAL.md",
+      "file:docs/BASELINE.md",
+      "cli:tepid-h1 delta-benchmark --length 4 --length 8 --iterations 3"
     ]
   },
   "M2_1_3b_ablation": {
@@ -31,6 +43,11 @@
     "exit_criteria": [
       "each retained experimental module shows a net quality or efficiency benefit",
       "end-to-end target-hardware speedup is positive"
+    ],
+    "evidence_refs": [
+      "file:docs/EXPERIMENTS.md",
+      "file:docs/ACCELERATOR.md",
+      "cli:tepid-h1 compare-smoke --trials 2 --steps 1 --corpus configs/paired_corpus.example.jsonl --inventory configs/data_inventory.example.json"
     ]
   },
   "M3_7b_product_evidence": {
@@ -41,6 +58,11 @@
     ],
     "exit_criteria": [
       "product quality, latency, cost and safety targets are predeclared and met"
+    ],
+    "evidence_refs": [
+      "file:docs/ZEROGPU_EVIDENCE.md",
+      "file:docs/TRAINING.md",
+      "file:src/tepid_h1/agent/runtime.py"
     ]
   },
   "M4_moe_prototype": {
@@ -51,6 +73,11 @@
     "exit_criteria": [
       "stable expert load CV at or below 0.25",
       "MoE provides net benefit under production batch sizes"
+    ],
+    "evidence_refs": [
+      "file:docs/ACCELERATOR.md",
+      "file:docs/LOCAL_GPU_EVIDENCE.md",
+      "cli:tepid-h1 moe-benchmark --target-device-label local-gpu --router-assignment-cv-threshold 0.25 --minimum-grouped-speedup 1.0 --require-m4-proxy"
     ]
   },
   "M5_formal_training": {
@@ -61,6 +88,11 @@
     "exit_criteria": [
       "all prior gates passed",
       "formal training separately approved"
+    ],
+    "evidence_refs": [
+      "file:docs/TRAINING.md",
+      "file:configs/stage_gates.json",
+      "cli:tepid-h1 stage-gates"
     ]
   }
 }

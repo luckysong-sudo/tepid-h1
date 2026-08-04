@@ -317,7 +317,10 @@ def main() -> int:
         _write_payload(audit_report.to_dict(), args.report)
         return 0 if audit_report.passed else 2
     if args.command == "stage-gates":
-        stage_gate_report = audit_stage_gates(load_stage_gates(args.config))
+        stage_gate_report = audit_stage_gates(
+            load_stage_gates(args.config),
+            evidence_root=Path.cwd(),
+        )
         _write_payload(stage_gate_report.to_dict(), args.report)
         return 0 if stage_gate_report.passed else 8
     if args.command == "project-status":

@@ -21,6 +21,7 @@ class StageGate:
     name: str
     deliverables: tuple[str, ...]
     exit_criteria: tuple[str, ...]
+    evidence_refs: tuple[str, ...]
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -50,9 +51,14 @@ def load_stage_gates(path: str | Path) -> dict[str, Any]:
     return payload
 
 
-def audit_stage_gates(payload: dict[str, Any]) -> StageGateReport:
+def audit_stage_gates(
+    payload: dict[str, Any],
+    *,
+    evidence_root: str | Path | None = None,
+) -> StageGateReport:
     errors: list[str] = []
     gates: list[StageGate] = []
+    root = Path(evidence_root).resolve() if evidence_root is not None else None
 
     actual_order = tuple(payload)
     if actual_order != EXPECTED_STAGE_ORDER:
@@ -77,11 +83,14 @@ def audit_stage_gates(payload: dict[str, Any]) -> StageGateReport:
             continue
         deliverables = _string_tuple(gate.get("deliverables"), f"{name}.deliverables", errors)
         exit_criteria = _string_tuple(gate.get("exit_criteria"), f"{name}.exit_criteria", errors)
+        evidence_refs = _string_tuple(gate.get("evidence_refs"), f"{name}.evidence_refs", errors)
+        _validate_evidence_refs(evidence_refs, name, errors, evidence_root=root)
         gates.append(
             StageGate(
                 name=name,
                 deliverables=deliverables,
                 exit_criteria=exit_criteria,
+                evidence_refs=evidence_refs,
             )
         )
 
@@ -104,3 +113,47 @@ def _string_tuple(value: Any, field_name: str, errors: list[str]) -> tuple[str, 
             continue
         items.append(item)
     return tuple(items)
+
+
+def _validate_evidence_refs(
+    refs: tuple[str, ...],
+    gate_name: str,
+    errors: list[str],
+    *,
+    evidence_root: Path | None,
+) -> None:
+    for index, ref in enumerate(refs):
+        if ":" not in ref:
+            errors.append(f"{gate_name}.evidence_refs[{index}] must include a ref scheme")
+            continue
+        scheme, value = ref.split(":", 1)
+        if scheme not in {"cli", "file"}:
+            errors.append(
+                f"{gate_name}.evidence_refs[{index}] uses unsupported scheme: {scheme!r}"
+            )
+            continue
+        if not value.strip():
+            errors.append(f"{gate_name}.evidence_refs[{index}] must include a ref target")
+            continue
+        if scheme == "file" and evidence_root is not None:
+            _validate_file_ref(value, gate_name, index, errors, evidence_root=evidence_root)
+
+
+def _validate_file_ref(
+    value: str,
+    gate_name: str,
+    index: int,
+    errors: list[str],
+    *,
+    evidence_root: Path,
+) -> None:
+    path = Path(value)
+    if path.is_absolute():
+        errors.append(f"{gate_name}.evidence_refs[{index}] file ref must be repository-relative")
+        return
+    resolved = (evidence_root / path).resolve()
+    if not resolved.is_relative_to(evidence_root):
+        errors.append(f"{gate_name}.evidence_refs[{index}] file ref escapes evidence root")
+        return
+    if not resolved.exists():
+        errors.append(f"{gate_name}.evidence_refs[{index}] file ref does not exist: {value}")
