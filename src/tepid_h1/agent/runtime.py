@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -54,6 +55,8 @@ class AgentRuntime:
         retry_backoff: float = 0.1,
     ) -> None:
         self.dependencies = dependencies
+        max_retries = _validate_runtime_int("max_retries", max_retries)
+        retry_backoff = _validate_runtime_float("retry_backoff", retry_backoff)
         if max_retries < 0:
             raise ValueError("max_retries must be non-negative")
         if retry_backoff < 0:
@@ -62,6 +65,7 @@ class AgentRuntime:
         self._retry_backoff = retry_backoff
 
     def run(self, task: str, *, max_steps: int = 32) -> FinalAnswer:
+        max_steps = _validate_runtime_int("max_steps", max_steps)
         if max_steps <= 0:
             raise ValueError("max_steps must be positive")
         state = RuntimeState(task=task, max_steps=max_steps)
@@ -122,3 +126,18 @@ class AgentRuntime:
     def _record(self, state: RuntimeState, action: AgentAction, result: object) -> None:
         if self.dependencies.telemetry is not None:
             self.dependencies.telemetry.record(state, action, result)
+
+
+def _validate_runtime_int(name: str, value: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer")
+    return value
+
+
+def _validate_runtime_float(name: str, value: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a finite number")
+    normalized = float(value)
+    if not math.isfinite(normalized):
+        raise ValueError(f"{name} must be finite")
+    return normalized

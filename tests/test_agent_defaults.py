@@ -144,6 +144,40 @@ class AgentDefaultsTests(unittest.TestCase):
         answer = runtime.run("read x", max_steps=3)
         self.assertEqual(answer.content, "done")
 
+    def test_runtime_rejects_invalid_retry_controls(self):
+        dependencies = RuntimeDependencies(
+            model=ScriptedModel([]),
+            context_builder=StateContextBuilder(),
+            policy=AllowlistPolicy(),
+            tools=ToolRegistry(),
+            verifier=EvidenceVerifier(),
+        )
+
+        with self.assertRaisesRegex(TypeError, "max_retries"):
+            AgentRuntime(dependencies, max_retries=True)
+        with self.assertRaisesRegex(TypeError, "retry_backoff"):
+            AgentRuntime(dependencies, retry_backoff=True)
+        with self.assertRaisesRegex(TypeError, "retry_backoff"):
+            AgentRuntime(dependencies, retry_backoff="0.1")  # type: ignore[arg-type]
+        with self.assertRaisesRegex(ValueError, "retry_backoff"):
+            AgentRuntime(dependencies, retry_backoff=float("inf"))
+
+    def test_runtime_rejects_invalid_step_budget_types(self):
+        runtime = AgentRuntime(
+            RuntimeDependencies(
+                model=ScriptedModel([]),
+                context_builder=StateContextBuilder(),
+                policy=AllowlistPolicy(),
+                tools=ToolRegistry(),
+                verifier=EvidenceVerifier(),
+            )
+        )
+
+        with self.assertRaisesRegex(TypeError, "max_steps"):
+            runtime.run("read x", max_steps=True)
+        with self.assertRaisesRegex(TypeError, "max_steps"):
+            runtime.run("read x", max_steps=1.0)  # type: ignore[arg-type]
+
     def test_runtime_denies_unauthorized_tool(self):
         registry = ToolRegistry({"read_file": lambda args: "ok"})
         runtime = AgentRuntime(

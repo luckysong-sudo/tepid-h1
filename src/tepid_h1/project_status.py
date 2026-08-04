@@ -197,6 +197,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
         evidence=(
             "policy, tool, verifier, telemetry and conversation defaults are implemented",
             "runtime protocol validation and failure handling have tests",
+            "runtime retry and step-budget controls reject ambiguous and non-finite values",
         ),
         gaps=(
             "runtime is not yet bound to a trained agent-capable model",
