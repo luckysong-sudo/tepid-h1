@@ -261,6 +261,67 @@ class TrainingTests(unittest.TestCase):
         ):
             torch.testing.assert_close(actual, expected, rtol=0, atol=0)
 
+    def test_scheduler_validates_input(self):
+        import torch
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import WarmupCosineScheduler
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+
+        with self.assertRaisesRegex(TypeError, "warmup_steps"):
+            WarmupCosineScheduler(optimizer, warmup_steps="2", total_steps=10)
+        with self.assertRaisesRegex(ValueError, "between zero and total_steps"):
+            WarmupCosineScheduler(optimizer, warmup_steps=15, total_steps=10)
+        with self.assertRaisesRegex(ValueError, "between zero and total_steps"):
+            WarmupCosineScheduler(optimizer, warmup_steps=2, total_steps=0)
+        with self.assertRaisesRegex(ValueError, "between zero and one"):
+            WarmupCosineScheduler(optimizer, warmup_steps=2, total_steps=10, min_lr_ratio=1.5)
+
+    def test_scheduler_step_raises_when_complete(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import WarmupCosineScheduler
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+        scheduler = WarmupCosineScheduler(optimizer, warmup_steps=1, total_steps=1)
+        scheduler.step()
+        with self.assertRaisesRegex(ValueError, "complete"):
+            scheduler.step()
+
+    def test_save_checkpoint_requires_non_negative_step(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import save_checkpoint
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            save_checkpoint("/tmp/negative.pt", model=model, optimizer=optimizer, step=-1)
+
+    def test_save_checkpoint_rejects_non_serializable_metadata(self):
+        import torch
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import save_checkpoint
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+        with self.assertRaisesRegex(TypeError, "JSON-compatible"):
+            save_checkpoint(
+                "/tmp/metadata_test.pt",
+                model=model,
+                optimizer=optimizer,
+                step=0,
+                metadata={"tensor": torch.tensor([1, 2, 3])},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
