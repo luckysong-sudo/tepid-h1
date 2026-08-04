@@ -130,6 +130,14 @@ class LocalGPUPreflightTests(unittest.TestCase):
     def test_preflight_config_rejects_invalid_memory_threshold(self):
         from tepid_h1.integrations import LocalGPUPreflightConfig
 
+        with self.assertRaisesRegex(TypeError, "minimum_operator_memory_mib"):
+            LocalGPUPreflightConfig(minimum_operator_memory_mib=True)
+
+        with self.assertRaisesRegex(TypeError, "minimum_scale_training_memory_mib"):
+            LocalGPUPreflightConfig(
+                minimum_scale_training_memory_mib=4096.0,  # type: ignore[arg-type]
+            )
+
         with self.assertRaisesRegex(ValueError, "minimum_operator_memory_mib"):
             LocalGPUPreflightConfig(minimum_operator_memory_mib=0)
 

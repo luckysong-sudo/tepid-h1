@@ -20,14 +20,35 @@ class LocalGPUPreflightConfig:
     minimum_scale_training_memory_mib: int = SCALE_TRAINING_MEMORY_MIB
 
     def __post_init__(self) -> None:
-        if self.minimum_operator_memory_mib <= 0:
+        minimum_operator_memory_mib = _validate_memory_threshold(
+            "minimum_operator_memory_mib",
+            self.minimum_operator_memory_mib,
+        )
+        object.__setattr__(self, "minimum_operator_memory_mib", minimum_operator_memory_mib)
+        minimum_scale_training_memory_mib = _validate_memory_threshold(
+            "minimum_scale_training_memory_mib",
+            self.minimum_scale_training_memory_mib,
+        )
+        object.__setattr__(
+            self,
+            "minimum_scale_training_memory_mib",
+            minimum_scale_training_memory_mib,
+        )
+
+        if minimum_operator_memory_mib <= 0:
             raise ValueError("minimum_operator_memory_mib must be positive")
-        if self.minimum_scale_training_memory_mib <= 0:
+        if minimum_scale_training_memory_mib <= 0:
             raise ValueError("minimum_scale_training_memory_mib must be positive")
-        if self.minimum_scale_training_memory_mib < self.minimum_operator_memory_mib:
+        if minimum_scale_training_memory_mib < minimum_operator_memory_mib:
             raise ValueError(
                 "minimum_scale_training_memory_mib must be >= minimum_operator_memory_mib"
             )
+
+
+def _validate_memory_threshold(name: str, value: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer")
+    return value
 
 
 def build_local_gpu_preflight_report(

@@ -183,6 +183,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "local GPU preflight warns when VRAM only supports smoke/operator checks",
             "local GPU operator-memory threshold is configurable in preflight reports",
             "local GPU preflight separates operator and scale-training memory thresholds",
+            "local GPU preflight rejects ambiguous memory-threshold controls",
             "local GPU readiness separates CUDA runtime, smoke checks and scale training",
         ),
         gaps=(
