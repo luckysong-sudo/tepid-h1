@@ -136,6 +136,69 @@ class CLIIntegrationTests(unittest.TestCase):
         self.assertEqual(args.steps, 3)
         self.assertEqual(args.max_load_cv, 0.3)
 
+    def test_moe_balance_report_produces_valid_json(self):
+        import json
+        import sys
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            report_path = f.name
+        try:
+            with patch.object(sys, "argv", [
+                "tepid-h1", "moe-balance-report",
+                "--batch-size", "2", "--sequence-length", "8",
+                "--steps", "1", "--seed", "42",
+                "--max-load-cv", "0.5",
+                "--report", report_path,
+            ]):
+                from tepid_h1.cli import main
+                result = main()
+
+            self.assertEqual(result, 0)
+            data = json.loads(Path(report_path).read_text())
+            self.assertEqual(data["schema_version"], 1)
+            self.assertTrue(data["routing"]["passed"])
+            self.assertEqual(data["routing"]["moe_layers"], 2)
+            self.assertEqual(data["config"]["steps"], 1)
+        finally:
+            Path(report_path).unlink(missing_ok=True)
+
+    def test_delta_validate_skip_gradients_argument(self):
+        from tepid_h1.cli import build_parser
+
+        args = build_parser().parse_args([
+            "delta-validate", "--backend", "eager",
+            "--skip-gradients", "--sequence-length", "16",
+        ])
+        self.assertTrue(args.skip_gradients)
+
+    def test_delta_validate_skip_gradients_produces_report(self):
+        import json
+        import sys
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            report_path = f.name
+        try:
+            with patch.object(sys, "argv", [
+                "tepid-h1", "delta-validate",
+                "--backend", "eager", "--device", "cpu",
+                "--skip-gradients", "--sequence-length", "8",
+                "--iterations", "1", "--seed", "71",
+                "--report", report_path,
+            ]):
+                from tepid_h1.cli import main
+                result = main()
+
+            self.assertEqual(result, 0)
+            data = json.loads(Path(report_path).read_text())
+            self.assertTrue(data["numerical_passed"])
+            self.assertEqual(data["config"]["verify_gradients"], False)
+        finally:
+            Path(report_path).unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     unittest.main()
