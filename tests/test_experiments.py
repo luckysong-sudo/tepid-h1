@@ -69,6 +69,36 @@ class PairedExperimentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "CPU"):
             PairedExperimentConfig(device="cpu", dtype="float16")
 
+    def test_experiment_config_rejects_invalid_control_types(self):
+        from tepid_h1.experiments import PairedExperimentConfig
+
+        with self.assertRaisesRegex(TypeError, "steps"):
+            PairedExperimentConfig(steps=True)
+        with self.assertRaisesRegex(TypeError, "batch_size"):
+            PairedExperimentConfig(batch_size=1.5)
+        with self.assertRaisesRegex(TypeError, "sequence_length"):
+            PairedExperimentConfig(sequence_length="8")  # type: ignore[arg-type]
+        with self.assertRaisesRegex(TypeError, "learning_rate"):
+            PairedExperimentConfig(learning_rate=True)
+        with self.assertRaisesRegex(TypeError, "max_gradient_norm"):
+            PairedExperimentConfig(max_gradient_norm=object())  # type: ignore[arg-type]
+
+    def test_experiment_config_rejects_non_finite_float_controls(self):
+        from tepid_h1.experiments import PairedExperimentConfig
+
+        with self.assertRaisesRegex(ValueError, "learning_rate"):
+            PairedExperimentConfig(learning_rate=float("inf"))
+        with self.assertRaisesRegex(ValueError, "max_gradient_norm"):
+            PairedExperimentConfig(max_gradient_norm=float("nan"))
+
+    def test_experiment_config_normalizes_integral_float_controls(self):
+        from tepid_h1.experiments import PairedExperimentConfig
+
+        config = PairedExperimentConfig(learning_rate=1, max_gradient_norm=2)
+
+        self.assertEqual(config.learning_rate, 1.0)
+        self.assertEqual(config.max_gradient_norm, 2.0)
+
     def test_unavailable_cuda_fails_closed(self):
         from tepid_h1.experiments import PairedExperimentConfig, run_paired_smoke
 

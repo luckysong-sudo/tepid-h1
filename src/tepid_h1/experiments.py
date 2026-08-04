@@ -39,15 +39,32 @@ class PairedExperimentConfig:
     dtype: str = "float32"
 
     def __post_init__(self) -> None:
-        if self.steps <= 0 or self.batch_size <= 0:
+        steps = _validate_experiment_int("steps", self.steps)
+        object.__setattr__(self, "steps", steps)
+        trials = _validate_experiment_int("trials", self.trials)
+        object.__setattr__(self, "trials", trials)
+        batch_size = _validate_experiment_int("batch_size", self.batch_size)
+        object.__setattr__(self, "batch_size", batch_size)
+        sequence_length = _validate_experiment_int("sequence_length", self.sequence_length)
+        object.__setattr__(self, "sequence_length", sequence_length)
+
+        learning_rate = _validate_experiment_float("learning_rate", self.learning_rate)
+        object.__setattr__(self, "learning_rate", learning_rate)
+        max_gradient_norm = _validate_experiment_float(
+            "max_gradient_norm",
+            self.max_gradient_norm,
+        )
+        object.__setattr__(self, "max_gradient_norm", max_gradient_norm)
+
+        if steps <= 0 or batch_size <= 0:
             raise ValueError("steps and batch_size must be positive")
-        if not 1 <= self.trials <= 20:
+        if not 1 <= trials <= 20:
             raise ValueError("trials must be between 1 and 20")
-        if not 2 <= self.sequence_length <= 64:
+        if not 2 <= sequence_length <= 64:
             raise ValueError("sequence_length must be between 2 and 64")
-        if self.learning_rate <= 0:
+        if learning_rate <= 0:
             raise ValueError("learning_rate must be positive")
-        if self.max_gradient_norm <= 0:
+        if max_gradient_norm <= 0:
             raise ValueError("max_gradient_norm must be positive")
         if self.device not in {"cpu", "cuda"}:
             raise ValueError("device must be 'cpu' or 'cuda'")
@@ -55,6 +72,21 @@ class PairedExperimentConfig:
             raise ValueError("dtype must be float32, bfloat16 or float16")
         if self.device == "cpu" and self.dtype != "float32":
             raise ValueError("CPU paired experiments currently require float32")
+
+
+def _validate_experiment_int(name: str, value: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer")
+    return value
+
+
+def _validate_experiment_float(name: str, value: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a finite number")
+    normalized = float(value)
+    if not math.isfinite(normalized):
+        raise ValueError(f"{name} must be finite")
+    return normalized
 
 
 @dataclass(frozen=True)

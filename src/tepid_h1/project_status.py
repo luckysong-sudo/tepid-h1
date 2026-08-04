@@ -121,6 +121,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "checkpoint saving rejects invalid step types and scheduler-step mismatches",
             "checkpoint loading rejects scheduler mismatches before mutating model state",
             "checkpoint loading validates metadata and CPU/CUDA RNG payloads before state restore",
+            "paired smoke configuration rejects ambiguous and non-finite training controls",
             "generation keyword overrides are applied by explicit presence, not default values",
             "generation validates prompt shape, dtype and token range before model execution",
             "generation rejects context lengths beyond model and reference-kernel limits",
