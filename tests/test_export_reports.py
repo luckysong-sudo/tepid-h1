@@ -2,8 +2,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 from tepid_h1.export_reports import export_csv, export_json, export_reports
 
 
