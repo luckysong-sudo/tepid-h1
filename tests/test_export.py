@@ -131,3 +131,11 @@ class TestModelExporter:
         result = exporter.export_safe_tensor(output_path)
         assert result.exists()
         assert result.parent == tmp_path / "nested" / "dir"
+
+    def test_export_for_inference_safetensors_only(self, exporter: ModelExporter, tmp_path: Path) -> None:
+        output_dir = tmp_path / "exported"
+        exports = exporter.export_for_inference(output_dir, formats=["safetensors"])
+        assert "safetensors" in exports
+        assert exports["safetensors"].exists()
+        config_path = exports["safetensors"].parent / "config.json"
+        assert config_path.exists()
