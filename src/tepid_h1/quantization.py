@@ -164,11 +164,12 @@ def _quantize_int8(
         scales = flat.abs().amax(dim=-1).clamp(min=1e-12) / 127.0
         zeros = None
     else:
-        q_min, q_max = 0.0, 255.0
+        scale_min: float = 0.0
+        scale_max: float = 255.0
         fmin = flat.amin(dim=-1)
         fmax = flat.amax(dim=-1)
-        scales = (fmax - fmin).clamp(min=1e-12) / q_max
-        zeros = (q_max * fmin / (fmin - fmax)).clamp(min=0.0, max=q_max)
+        scales = (fmax - fmin).clamp(min=1e-12) / scale_max
+        zeros = (scale_max * fmin / (fmin - fmax)).clamp(min=0.0, max=scale_max)
 
     scales = scales.reshape(*shape[:-1], num_groups, 1)
     zeros = zeros.reshape(*shape[:-1], num_groups, 1) if zeros is not None else None
@@ -200,11 +201,12 @@ def _quantize_int4(
         scales = flat.abs().amax(dim=-1).clamp(min=1e-12) / 7.0
         zeros = None
     else:
-        q_min, q_max = 0.0, 15.0
+        scale_min: float = 0.0
+        scale_max: float = 15.0
         fmin = flat.amin(dim=-1)
         fmax = flat.amax(dim=-1)
-        scales = (fmax - fmin).clamp(min=1e-12) / q_max
-        zeros = (q_max * fmin / (fmin - fmax)).clamp(min=0.0, max=q_max)
+        scales = (fmax - fmin).clamp(min=1e-12) / scale_max
+        zeros = (scale_max * fmin / (fmin - fmax)).clamp(min=0.0, max=scale_max)
 
     scales = scales.reshape(*shape[:-1], num_groups, 1)
     zeros = zeros.reshape(*shape[:-1], num_groups, 1) if zeros is not None else None
@@ -378,7 +380,7 @@ def apply_quantized_model(
         current = model
         for part in parts:
             if part.isdigit():
-                current = current[int(part)]
+                current = current[int(part)]  # type: ignore[index]
             else:
                 current = getattr(current, part)
         if isinstance(current, nn.Linear):
@@ -387,7 +389,7 @@ def apply_quantized_model(
             if quantized.bias is not None:
                 current.bias = nn.Parameter(quantized.bias, requires_grad=False)
             else:
-                current.bias = None
+                current.bias = None  # type: ignore[assignment]
     return model
 
 

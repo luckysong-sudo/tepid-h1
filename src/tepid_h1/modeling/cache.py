@@ -36,6 +36,7 @@ class AttentionCache:
         if new_device == self.device and new_dtype == self.dtype:
             return self
         self.k_cache = self.k_cache.to(device=new_device, dtype=new_dtype)
+        assert self.v_cache is not None
         self.v_cache = self.v_cache.to(device=new_device, dtype=new_dtype)
         self.device = new_device
         self.dtype = new_dtype
@@ -80,10 +81,14 @@ class AttentionCache:
             k_new = k_new[tuple(slices)]
             v_new = v_new[tuple(slices)]
             if k_new.shape[seq_dim] == 0 or v_new.shape[seq_dim] == 0:
+                assert self.k_cache is not None
+                assert self.v_cache is not None
                 return self.k_cache, self.v_cache
 
         prev_k = self.k_cache
         prev_v = self.v_cache
+        assert prev_k is not None
+        assert prev_v is not None
         new_k = torch.cat([prev_k, k_new], dim=seq_dim)
         new_v = torch.cat([prev_v, v_new], dim=seq_dim)
         self.k_cache = new_k
