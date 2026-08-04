@@ -201,6 +201,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "architecture, training, governance, retrieval and roadmap docs exist",
             "stage-gate and project-hygiene checks are now machine-readable",
             "stage-gate audit validates per-gate evidence references for release tracking",
+            "stage-gate CLI evidence references are parser-validated without executing gates",
             "top-level and subpackage public API exports are protected by snapshot tests",
             "public API reference documents the stable top-level and subpackage exports",
             "inference export rejects unsupported formats instead of silently skipping them",

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 from collections.abc import Callable
+from contextlib import redirect_stderr
 from dataclasses import asdict
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -261,6 +264,29 @@ def _write_payload(payload: dict[str, Any], report: Path | None) -> None:
     print(rendered)
 
 
+def _validate_stage_gate_cli_ref(command: str) -> str | None:
+    try:
+        tokens = shlex.split(command)
+    except ValueError as exc:
+        return f"could not parse command: {exc}"
+    if not tokens:
+        return "command is empty"
+    if tokens[0] != "tepid-h1":
+        return "command must start with tepid-h1"
+    if len(tokens) == 1:
+        return "command must include a subcommand"
+
+    parser = build_parser()
+    stderr = StringIO()
+    try:
+        with redirect_stderr(stderr):
+            parser.parse_args(tokens[1:])
+    except SystemExit:
+        parser_error = " ".join(stderr.getvalue().split())
+        return f"command is not accepted by the CLI parser: {parser_error}"
+    return None
+
+
 def _load_tokenizer(path: Path) -> Any:
     try:
         from tokenizers import Tokenizer
@@ -320,6 +346,7 @@ def main() -> int:
         stage_gate_report = audit_stage_gates(
             load_stage_gates(args.config),
             evidence_root=Path.cwd(),
+            cli_validator=_validate_stage_gate_cli_ref,
         )
         _write_payload(stage_gate_report.to_dict(), args.report)
         return 0 if stage_gate_report.passed else 8

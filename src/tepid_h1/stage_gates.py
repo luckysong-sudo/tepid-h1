@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -55,6 +56,7 @@ def audit_stage_gates(
     payload: dict[str, Any],
     *,
     evidence_root: str | Path | None = None,
+    cli_validator: Callable[[str], str | None] | None = None,
 ) -> StageGateReport:
     errors: list[str] = []
     gates: list[StageGate] = []
@@ -84,7 +86,13 @@ def audit_stage_gates(
         deliverables = _string_tuple(gate.get("deliverables"), f"{name}.deliverables", errors)
         exit_criteria = _string_tuple(gate.get("exit_criteria"), f"{name}.exit_criteria", errors)
         evidence_refs = _string_tuple(gate.get("evidence_refs"), f"{name}.evidence_refs", errors)
-        _validate_evidence_refs(evidence_refs, name, errors, evidence_root=root)
+        _validate_evidence_refs(
+            evidence_refs,
+            name,
+            errors,
+            evidence_root=root,
+            cli_validator=cli_validator,
+        )
         gates.append(
             StageGate(
                 name=name,
@@ -121,6 +129,7 @@ def _validate_evidence_refs(
     errors: list[str],
     *,
     evidence_root: Path | None,
+    cli_validator: Callable[[str], str | None] | None,
 ) -> None:
     for index, ref in enumerate(refs):
         if ":" not in ref:
@@ -137,6 +146,13 @@ def _validate_evidence_refs(
             continue
         if scheme == "file" and evidence_root is not None:
             _validate_file_ref(value, gate_name, index, errors, evidence_root=evidence_root)
+        if scheme == "cli" and cli_validator is not None:
+            validation_error = cli_validator(value.strip())
+            if validation_error is not None:
+                errors.append(
+                    f"{gate_name}.evidence_refs[{index}] invalid CLI ref: "
+                    f"{validation_error}"
+                )
 
 
 def _validate_file_ref(

@@ -267,6 +267,57 @@ class CLIIntegrationTests(unittest.TestCase):
         )
         self.assertTrue(report["gates"][4]["evidence_refs"])
 
+    def test_stage_gates_command_rejects_unknown_cli_evidence_ref(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        payload = {
+            "M0_data_tokenizer": {
+                "deliverables": ["deliverable"],
+                "exit_criteria": ["criterion"],
+                "evidence_refs": ["cli:tepid-h1 unknown-command"],
+            },
+            "M1_350m_prototype": {
+                "deliverables": ["deliverable"],
+                "exit_criteria": ["criterion"],
+                "evidence_refs": ["cli:tepid-h1 plan"],
+            },
+            "M2_1_3b_ablation": {
+                "deliverables": ["deliverable"],
+                "exit_criteria": ["criterion"],
+                "evidence_refs": ["cli:tepid-h1 project-status"],
+            },
+            "M3_7b_product_evidence": {
+                "deliverables": ["deliverable"],
+                "exit_criteria": ["criterion"],
+                "evidence_refs": ["cli:tepid-h1 stage-gates"],
+            },
+            "M4_moe_prototype": {
+                "deliverables": ["deliverable"],
+                "exit_criteria": ["criterion"],
+                "evidence_refs": ["cli:tepid-h1 moe-benchmark --length 2 --iterations 1"],
+            },
+            "M5_formal_training": {
+                "deliverables": ["deliverable"],
+                "exit_criteria": ["criterion"],
+                "evidence_refs": ["cli:tepid-h1 stage-gates"],
+            },
+        }
+        with tempfile.TemporaryDirectory() as tempdir:
+            config = Path(tempdir) / "stage_gates.json"
+            config.write_text(json.dumps(payload), encoding="utf-8")
+            with patch.object(sys, "argv", ["tepid-h1", "stage-gates", str(config)]):
+                with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                    result = main()
+                    self.assertEqual(result, 8)
+                    report = json.loads(mock_stdout.getvalue())
+
+        self.assertFalse(report["passed"])
+        self.assertTrue(any("invalid CLI ref" in error for error in report["errors"]))
+
     def test_project_status_command_outputs_json(self):
         import sys
         from io import StringIO

@@ -53,6 +53,18 @@ class StageGateTests(unittest.TestCase):
         self.assertFalse(report.passed)
         self.assertTrue(any("unsupported scheme" in error for error in report.errors))
 
+    def test_invalid_cli_evidence_ref_fails_when_validator_is_supplied(self) -> None:
+        payload = load_stage_gates("configs/stage_gates.json")
+        payload["M4_moe_prototype"]["evidence_refs"] = ["cli:tepid-h1 missing-command"]
+
+        report = audit_stage_gates(
+            payload,
+            cli_validator=lambda command: "unknown command" if command else None,
+        )
+
+        self.assertFalse(report.passed)
+        self.assertTrue(any("invalid CLI ref" in error for error in report.errors))
+
     def test_missing_file_evidence_ref_fails_when_root_is_checked(self) -> None:
         payload = load_stage_gates("configs/stage_gates.json")
         payload["M4_moe_prototype"]["evidence_refs"] = ["file:docs/DOES_NOT_EXIST.md"]
