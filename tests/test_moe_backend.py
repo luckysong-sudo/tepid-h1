@@ -135,6 +135,16 @@ class RoutedMoEBenchmarkTests(unittest.TestCase):
             RoutedMoEBenchmarkConfig(sequence_lengths=())
         with self.assertRaisesRegex(ValueError, "sequence_lengths"):
             RoutedMoEBenchmarkConfig(sequence_lengths=(0,))
+        with self.assertRaisesRegex(TypeError, "batch_size"):
+            RoutedMoEBenchmarkConfig(batch_size=True)
+        with self.assertRaisesRegex(TypeError, "iterations"):
+            RoutedMoEBenchmarkConfig(iterations=False)
+        with self.assertRaisesRegex(TypeError, "seed"):
+            RoutedMoEBenchmarkConfig(seed="97")  # type: ignore[arg-type]
+        with self.assertRaisesRegex(TypeError, "sequence_lengths"):
+            RoutedMoEBenchmarkConfig(sequence_lengths=[2])  # type: ignore[arg-type]
+        with self.assertRaisesRegex(TypeError, "sequence_lengths"):
+            RoutedMoEBenchmarkConfig(sequence_lengths=(True,))
         with self.assertRaisesRegex(ValueError, "target_device_label"):
             RoutedMoEBenchmarkConfig(target_device_label=" ")
         with self.assertRaisesRegex(ValueError, "router_assignment_cv_threshold"):

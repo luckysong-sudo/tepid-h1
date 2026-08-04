@@ -143,6 +143,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "Delta benchmark cases now include stable shape roles, target-evidence flags and "
             "qualification-reason aggregates",
             "MoE benchmark matrix reports routing load, oracle parity and grouped throughput",
+            "MoE benchmark configs reject ambiguous integer controls before execution",
             "MoE benchmark cases now include stable shape roles and target-evidence flags",
             "MoE benchmark reports expert-assignment coefficient of variation for load "
             "balance tracking",
