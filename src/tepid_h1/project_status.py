@@ -109,7 +109,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "sampling applies temperature before top-k and nucleus filtering",
             "generation validates special token IDs against the model vocabulary",
             "generation configuration rejects ambiguous control-value types",
-            "compute-matched baseline validates token dtype, range and empty sequences",
+            "compute-matched baseline validates token inputs and attention-state counts",
             "evaluation supports masked labels and weights loss by valid target tokens",
             "training rejects batches without supervised target tokens before forward",
             "training and evaluation validate supervised target shapes before forward",

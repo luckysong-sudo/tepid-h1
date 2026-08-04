@@ -89,6 +89,24 @@ class BaselineModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "sequence length"):
             model(torch.empty((1, 0), dtype=torch.long))
 
+    def test_baseline_rejects_missing_or_extra_attention_states(self):
+        from tepid_h1.modeling import TransformerBaselineCausalLM
+
+        config = TransformerBaselineConfig.active_parameter_matched(TepidH1Config.smoke())
+        model = TransformerBaselineCausalLM(config)
+        input_ids = torch.randint(0, config.model.vocab_size, (1, 7))
+
+        with torch.no_grad():
+            output = model(input_ids)
+
+        with self.assertRaisesRegex(ValueError, "attention_states"):
+            model(input_ids[:, :2], attention_states=output.attention_states[:-1])
+        with self.assertRaisesRegex(ValueError, "attention_states"):
+            model(
+                input_ids[:, :2],
+                attention_states=output.attention_states + output.attention_states[:1],
+            )
+
     def test_baseline_chunked_forward_matches_single_pass(self):
         from tepid_h1.modeling import TransformerBaselineCausalLM
 

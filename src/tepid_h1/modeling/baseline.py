@@ -156,6 +156,11 @@ class TransformerBaselineModel(nn.Module):
         attention_states: tuple[AttentionState, ...] | None = None,
     ) -> TepidH1Output:
         _validate_input_ids(input_ids, self.config.vocab_size)
+        if attention_states is not None and len(attention_states) != len(self.layers):
+            raise ValueError(
+                "attention_states must contain one state per baseline attention layer: "
+                f"expected {len(self.layers)}, got {len(attention_states)}"
+            )
         provided_states = iter(attention_states or ())
         x = self.token_embeddings(input_ids)
         next_states: list[AttentionState] = []
