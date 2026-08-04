@@ -37,6 +37,24 @@ class MoERouterStats:
     expert_counts: Tensor
     router_probabilities: Tensor
 
+    def balance_report(self, *, max_load_cv: float = 0.25) -> dict[str, float | int | bool]:
+        """Summarize expert assignment balance for stage-gate reporting."""
+        if max_load_cv < 0:
+            raise ValueError("max_load_cv must be non-negative")
+        counts = self.expert_counts.float()
+        mean = counts.mean()
+        standard_deviation = counts.std(unbiased=False)
+        load_cv = float((standard_deviation / mean).item()) if mean > 0 else float("inf")
+        return {
+            "total_assignments": int(counts.sum().item()),
+            "active_experts": int((counts > 0).sum().item()),
+            "expert_count": int(counts.numel()),
+            "mean_assignments": float(mean.item()),
+            "load_cv": load_cv,
+            "max_load_cv": max_load_cv,
+            "passed": load_cv <= max_load_cv,
+        }
+
 
 @dataclass(frozen=True)
 class AttentionState:

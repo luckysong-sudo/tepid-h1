@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
-from torch import Tensor, nn
+from torch import Tensor
 
 from .config import TepidH1Config
 from .modeling import AttentionState, TepidH1CausalLM
@@ -117,13 +117,6 @@ class InferenceEngine:
         )
 
         device = torch.device(effective_config.device)
-        dtype_map = {
-            "float32": torch.float32,
-            "bfloat16": torch.bfloat16,
-            "float16": torch.float16,
-        }
-        dtype = dtype_map.get(effective_config.dtype, torch.float32)
-
         input_ids = input_ids.to(device=device)
         if input_ids.ndim == 1:
             input_ids = input_ids.unsqueeze(0)
@@ -273,7 +266,7 @@ def _top_p_filter(logits: Tensor, top_p: float) -> Tensor:
     """Zero out logits with cumulative probability above top-p."""
     if top_p >= 1.0:
         return logits
-    sorted_logits, sorted_indices = torch.sort(logits, dim=-1, descending=True)
+    sorted_logits, _ = torch.sort(logits, dim=-1, descending=True)
     cumulative_probs = torch.cumsum(torch.softmax(sorted_logits, dim=-1), dim=-1)
     indices_to_remove = cumulative_probs > top_p
     indices_to_remove[..., 0] = False

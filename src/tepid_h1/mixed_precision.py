@@ -1,13 +1,14 @@
 """Mixed precision training utilities for improved performance."""
 from __future__ import annotations
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Generator
+from typing import Any
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 class PrecisionMode(str, Enum):
@@ -46,11 +47,8 @@ class MixedPrecisionManager:
 
     def _init_scaler(self) -> None:
         """Initialize gradient scaler if enabled."""
-        if self.config.enabled and self.config.grad_scaler:
-            try:
-                self.scaler = torch.amp.GradScaler("cuda")
-            except Exception:
-                self.scaler = None
+        if self.config.enabled and self.config.grad_scaler and torch.cuda.is_available():
+            self.scaler = torch.amp.GradScaler("cuda")
 
     @contextmanager
     def autocast_context(self) -> Generator[None, None, None]:

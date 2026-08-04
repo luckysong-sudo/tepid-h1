@@ -61,7 +61,6 @@ def log_training_step(
     learning_rate: float,
 ) -> None:
     """Log a training step with structured data."""
-    extra = getattr(logging, "Extra", None)
     record = logger.makeRecord(
         logger.name,
         logging.INFO,

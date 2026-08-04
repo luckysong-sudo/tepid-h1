@@ -1,9 +1,8 @@
 """Tests for gradient checkpointing utilities."""
 from __future__ import annotations
 
-import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 from tepid_h1.config import TepidH1Config
 from tepid_h1.gradient_checkpointing import (

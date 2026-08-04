@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol, TypeAlias
 
-
 # --- Role enum ---
 
 class Role(str, Enum):
@@ -137,5 +136,4 @@ class Telemetry(Protocol):
 
 class ModelValidationError(ValueError):
     """Raised when model output violates protocol constraints."""
-    pass
 

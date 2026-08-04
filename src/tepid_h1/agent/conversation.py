@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .protocols import FinalAnswer, Role, ToolCall
-from .runtime import AgentRuntime, RuntimeDependencies
+from .runtime import AgentRuntime
 
 
 @dataclass
@@ -135,7 +135,7 @@ class ConversationAgent:
                 f"{conversation.task}\n\nContext: {conversation.get_context_for_model()}",
                 max_steps=max_steps,
             )
-        except Exception as exc:
+        except Exception:
             turn = conversation.current_turn
             if turn is not None:
                 turn.completed = True

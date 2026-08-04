@@ -1,12 +1,11 @@
 """KV-cache inference optimization for Tepid-H1 model."""
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
 import torch
-from torch import Tensor, nn
+from torch import Tensor
 
 
 @dataclass
@@ -16,7 +15,7 @@ class AttentionCache:
     k_cache: Tensor | None = None
     v_cache: Tensor | None = None
     seq_len: int = 0
-    device: torch.device = torch.device("cpu")
+    device: torch.device = field(default_factory=lambda: torch.device("cpu"))
     dtype: torch.dtype = torch.float32
 
     def __post_init__(self) -> None:
@@ -29,7 +28,7 @@ class AttentionCache:
             self.dtype = self.k_cache.dtype
             self.seq_len = self.k_cache.shape[-2]
 
-    def to(self, device: torch.device | None = None, dtype: torch.dtype | None = None) -> "AttentionCache":
+    def to(self, device: torch.device | None = None, dtype: torch.dtype | None = None) -> AttentionCache:
         if self.k_cache is None:
             return self
         new_device = device or self.device

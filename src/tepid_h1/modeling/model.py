@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 from torch import Tensor, nn
@@ -12,6 +13,7 @@ from .layers import (
     GatedDeltaMemoryEager,
     GlobalSparseAttentionReference,
     GQAAttentionNative,
+    MoERouterStats,
     RMSNorm,
     RoutedMoEReference,
     SwiGLU,
@@ -103,6 +105,26 @@ class TepidH1Model(nn.Module):
     def _initialize(self, module: nn.Module) -> None:
         if isinstance(module, (nn.Linear, nn.Embedding)):
             nn.init.normal_(module.weight, mean=0.0, std=self.config.initializer_range)
+
+    def moe_balance_report(self, *, max_load_cv: float = 0.25) -> dict[str, Any]:
+        """Aggregate the most recent routing counts across MoE layers."""
+        counts = [
+            layer.channel_mixer.last_router_stats.expert_counts
+            for layer in self.layers
+            if isinstance(layer.channel_mixer, RoutedMoEReference)
+            and layer.channel_mixer.last_router_stats is not None
+        ]
+        if not counts:
+            return {"moe_layers": 0, "observed_layers": 0, "passed": False}
+        aggregate = torch.stack(counts).sum(dim=0)
+        result = MoERouterStats(aggregate, torch.empty(0, device=aggregate.device)).balance_report(
+            max_load_cv=max_load_cv
+        )
+        result["moe_layers"] = sum(
+            isinstance(layer.channel_mixer, RoutedMoEReference) for layer in self.layers
+        )
+        result["observed_layers"] = len(counts)
+        return result
 
     def forward(
         self,

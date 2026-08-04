@@ -94,6 +94,28 @@ class TestQuantizedLayer:
         ql_cpu = ql.to(torch.device("cpu"))
         assert ql_cpu.device == torch.device("cpu")
 
+    def test_nf4_round_trip_preserves_shape_and_scale(self) -> None:
+        linear = nn.Linear(7, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.NF4, group_size=0)
+
+        quantized = QuantizedLayer.from_linear(linear, cfg)
+        dequantized = quantized.dequantize()
+
+        assert quantized.weight.dtype == torch.uint8
+        assert quantized.weight.shape == (4, 4)
+        assert dequantized.shape == linear.weight.shape
+        assert torch.allclose(dequantized.abs().amax(dim=-1), linear.weight.abs().amax(dim=-1), atol=1e-6)
+
+    def test_int4_round_trip_preserves_original_shape(self) -> None:
+        linear = nn.Linear(7, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT4, group_size=4)
+
+        quantized = QuantizedLayer.from_linear(linear, cfg)
+        dequantized = quantized.dequantize()
+
+        assert quantized.weight.shape == (4, 4)
+        assert dequantized.shape == linear.weight.shape
+
 
 class TestQuantizeModel:
     def test_quantize_simple_model(self) -> None:

@@ -1,5 +1,4 @@
 """Tests for mixed precision training utilities."""
-import pytest
 import torch
 
 

@@ -22,6 +22,7 @@ class DeltaBackendValidationConfig:
     iterations: int = 3
     seed: int = 71
     target_device_label: str | None = None
+    verify_gradients: bool = True
 
     def __post_init__(self) -> None:
         if self.backend not in {"eager", "inductor"}:
@@ -34,8 +35,8 @@ class DeltaBackendValidationConfig:
             raise ValueError("CPU Delta validation currently requires float32")
         if self.batch_size <= 0:
             raise ValueError("batch_size must be positive")
-        if not 2 <= self.sequence_length <= 64:
-            raise ValueError("sequence_length must be between 2 and 64")
+        if not 2 <= self.sequence_length <= 8192:
+            raise ValueError("sequence_length must be between 2 and 8192")
         if not 1 <= self.iterations <= 100:
             raise ValueError("iterations must be between 1 and 100")
         if self.target_device_label is not None and not self.target_device_label.strip():
@@ -75,9 +76,6 @@ def validate_delta_backend(config: DeltaBackendValidationConfig) -> dict[str, An
 
     reference_output, reference_final_state = reference(reference_input, reference_state)
     candidate_output, candidate_final_state = candidate(candidate_input, candidate_state)
-    _objective(reference_output, reference_final_state).backward()
-    _objective(candidate_output, candidate_final_state).backward()
-
     comparisons: dict[str, Any] = {
         "forward_output": _compare(
             reference_output,
@@ -89,22 +87,29 @@ def validate_delta_backend(config: DeltaBackendValidationConfig) -> dict[str, An
             candidate_final_state,
             **tolerance,
         ),
-        "input_gradient": _compare(
-            _required_gradient(reference_input, "reference input"),
-            _required_gradient(candidate_input, "candidate input"),
-            **tolerance,
-        ),
-        "initial_state_gradient": _compare(
-            _required_gradient(reference_state, "reference state"),
-            _required_gradient(candidate_state, "candidate state"),
-            **tolerance,
-        ),
-        "parameter_gradients": _compare_parameter_gradients(
-            reference,
-            candidate_layer,
-            **tolerance,
-        ),
     }
+    if config.verify_gradients:
+        _objective(reference_output, reference_final_state).backward()
+        _objective(candidate_output, candidate_final_state).backward()
+        comparisons.update(
+            {
+                "input_gradient": _compare(
+                    _required_gradient(reference_input, "reference input"),
+                    _required_gradient(candidate_input, "candidate input"),
+                    **tolerance,
+                ),
+                "initial_state_gradient": _compare(
+                    _required_gradient(reference_state, "reference state"),
+                    _required_gradient(candidate_state, "candidate state"),
+                    **tolerance,
+                ),
+                "parameter_gradients": _compare_parameter_gradients(
+                    reference,
+                    candidate_layer,
+                    **tolerance,
+                ),
+            }
+        )
     comparisons["chunked_recurrence"] = _compare_chunked(
         reference,
         candidate,

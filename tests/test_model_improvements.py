@@ -2,12 +2,12 @@
 
 import pytest
 import torch
-from torch import nn
 
 from tepid_h1.config import TepidH1Config
 from tepid_h1.modeling.layers import (
     GatedDeltaMemoryEager,
     GatedDeltaMemoryReference,
+    MoERouterStats,
     RMSNorm,
 )
 
@@ -93,6 +93,26 @@ class TestLayerImprovements:
         out = norm(x)
         assert out.shape == x.shape
 
+    def test_moe_router_balance_report(self):
+        stats = MoERouterStats(
+            expert_counts=torch.tensor([10, 10, 10, 10]),
+            router_probabilities=torch.empty(0),
+        )
+
+        report = stats.balance_report(max_load_cv=0.25)
+
+        assert report["load_cv"] == 0.0
+        assert report["active_experts"] == 4
+        assert report["passed"] is True
+
+    def test_moe_router_balance_report_flags_imbalance(self):
+        stats = MoERouterStats(
+            expert_counts=torch.tensor([40, 0, 0, 0]),
+            router_probabilities=torch.empty(0),
+        )
+
+        assert stats.balance_report()["passed"] is False
+
 
 class TestModelTypeAnnotations:
     """Test improved type annotations in model."""
@@ -145,3 +165,15 @@ class TestModelTypeAnnotations:
         x = torch.randn(10,)
         with pytest.raises(ValueError, match="input_ids must have shape"):
             model(x)
+
+    def test_model_aggregates_moe_router_balance(self):
+        from tepid_h1.modeling.model import TepidH1Model
+
+        model = TepidH1Model(TepidH1Config.smoke())
+        model(torch.randint(0, 128, (1, 4)))
+
+        report = model.moe_balance_report()
+
+        assert report["moe_layers"] > 0
+        assert report["observed_layers"] > 0
+        assert "load_cv" in report

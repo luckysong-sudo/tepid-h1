@@ -39,8 +39,23 @@ class DeltaBackendValidationTests(unittest.TestCase):
             DeltaBackendValidationConfig(backend="unknown")
         with self.assertRaisesRegex(ValueError, "sequence_length"):
             DeltaBackendValidationConfig(sequence_length=1)
+        with self.assertRaisesRegex(ValueError, "sequence_length"):
+            DeltaBackendValidationConfig(sequence_length=8193)
         with self.assertRaisesRegex(ValueError, "target_device_label"):
             DeltaBackendValidationConfig(target_device_label=" ")
+
+    def test_forward_only_validation_omits_gradient_comparisons(self):
+        from tepid_h1.evaluation.delta_backend import (
+            DeltaBackendValidationConfig,
+            validate_delta_backend,
+        )
+
+        report = validate_delta_backend(
+            DeltaBackendValidationConfig(sequence_length=3, iterations=1, verify_gradients=False)
+        )
+
+        self.assertTrue(report["numerical_passed"])
+        self.assertNotIn("input_gradient", report["comparisons"])
 
 
 if __name__ == "__main__":

@@ -1,13 +1,17 @@
 """Training callbacks and monitoring for Tepid-H1."""
 from __future__ import annotations
 
+import logging
 import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -220,13 +224,18 @@ class TrainingRunner:
                 try:
                     callback.on_step(self._step_count, metrics)
                 except Exception as exc:
-                    for cb in self.callbacks:
-                        if cb.on_error is not None:
-                            try:
-                                cb.on_error(exc, metrics)
-                            except Exception:
-                                pass
+                    logger.exception("training step callback failed")
+                    self._notify_callback_error(exc, metrics)
         return metrics
+
+    def _notify_callback_error(self, error: Exception, metrics: dict[str, Any]) -> None:
+        for callback in self.callbacks:
+            if callback.on_error is None:
+                continue
+            try:
+                callback.on_error(error, metrics)
+            except Exception:
+                logger.exception("training error callback failed")
 
     def train_epoch(
         self,
@@ -252,12 +261,7 @@ class TrainingRunner:
                 )
                 epoch_losses.append(metrics["loss"])
             except Exception as exc:
-                for callback in self.callbacks:
-                    if callback.on_error is not None:
-                        try:
-                            callback.on_error(exc, {"step": step_idx})
-                        except Exception:
-                            pass
+                self._notify_callback_error(exc, {"step": step_idx})
                 raise
 
         elapsed = time.perf_counter() - epoch_start
@@ -274,7 +278,7 @@ class TrainingRunner:
                 try:
                     callback.on_epoch(self._step_count, epoch_metrics)
                 except Exception:
-                    pass
+                    logger.exception("training epoch callback failed")
         return epoch_metrics
 
     def checkpoint(self, path: str | Path) -> dict[str, Any]:
@@ -296,5 +300,5 @@ class TrainingRunner:
                 try:
                     callback.on_checkpoint(self._step_count, {"path": str(path)})
                 except Exception:
-                    pass
+                    logger.exception("training checkpoint callback failed")
         return state

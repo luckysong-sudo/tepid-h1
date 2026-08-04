@@ -1,14 +1,19 @@
 """Tests for training callbacks and monitoring."""
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 import torch
 
-from tepid_h1.callbacks import EarlyStopper, LossTracker, TrainingCallback, TrainingMetricsBuffer, TrainingRunner
+from tepid_h1.callbacks import (
+    EarlyStopper,
+    LossTracker,
+    TrainingCallback,
+    TrainingMetricsBuffer,
+    TrainingRunner,
+)
 
 
 class TestTrainingMetricsBuffer:

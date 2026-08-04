@@ -1,7 +1,7 @@
 import unittest
 
 from tepid_h1.data import BenchmarkSample, benchmark_candidate, select_candidate
-from tepid_h1.data.tokenizer_benchmark import corpus_digest
+from tepid_h1.data.tokenizer_benchmark import cached_tokenize, corpus_digest
 
 SAMPLES = (
     BenchmarkSample(domain="zh", text="端侧智能"),
@@ -58,6 +58,21 @@ class TokenizerBenchmarkTests(unittest.TestCase):
         selection = select_candidate(candidates)
         self.assertEqual(selection["selected"], "80k")
         self.assertEqual(selection["selected_vocab_size"], 80_000)
+
+    def test_cached_tokenize_reuses_result_for_matching_content_and_name(self):
+        calls = 0
+
+        def encode(text):
+            nonlocal calls
+            calls += 1
+            return [len(text)]
+
+        first, _ = cached_tokenize(encode, "tokenizer fixture", name="fixture")
+        second, _ = cached_tokenize(encode, "tokenizer fixture", name="fixture")
+
+        self.assertEqual(first, (17,))
+        self.assertEqual(second, (17,))
+        self.assertEqual(calls, 1)
 
 
 if __name__ == "__main__":

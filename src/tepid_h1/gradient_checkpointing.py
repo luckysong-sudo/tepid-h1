@@ -5,7 +5,7 @@ from functools import wraps
 from typing import Any
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 def apply_gradient_checkpointing(

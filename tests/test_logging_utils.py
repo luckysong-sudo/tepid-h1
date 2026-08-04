@@ -1,21 +1,22 @@
 """Tests for logging utilities."""
-import pytest
 
 
 class TestSetupLogging:
     """Test structured logging setup."""
 
     def test_setup_logging_returns_logger(self):
-        from tepid_h1.logging_utils import setup_logging
         import logging
+
+        from tepid_h1.logging_utils import setup_logging
 
         logger = setup_logging(level="DEBUG")
         assert isinstance(logger, logging.Logger)
         assert logger.level == logging.DEBUG
 
     def test_setup_logging_default_level(self):
-        from tepid_h1.logging_utils import setup_logging
         import logging
+
+        from tepid_h1.logging_utils import setup_logging
 
         logger = setup_logging()
         assert logger.level == logging.INFO
@@ -41,8 +42,8 @@ class TestLogTrainingStep:
     """Test training step logging."""
 
     def test_log_training_step(self, caplog):
-        from tepid_h1.logging_utils import setup_logging, log_training_step
-        import logging
+
+        from tepid_h1.logging_utils import log_training_step, setup_logging
 
         logger = setup_logging(level="INFO")
         with caplog.at_level("INFO", logger="tepid_h1"):

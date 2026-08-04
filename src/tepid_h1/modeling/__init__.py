@@ -10,11 +10,11 @@ from .baseline import (
 )
 from .layers import (
     AttentionState,
-    GQAAttentionNative,
-    GQAAttentionReference,
-    GlobalSparseAttentionReference,
     GatedDeltaMemoryEager,
     GatedDeltaMemoryReference,
+    GlobalSparseAttentionReference,
+    GQAAttentionNative,
+    GQAAttentionReference,
     RoutedMoEReference,
     SwiGLU,
 )
@@ -24,9 +24,9 @@ __all__ = [
     "AttentionState",
     "GQAAttentionNative",
     "GQAAttentionReference",
-    "GlobalSparseAttentionReference",
     "GatedDeltaMemoryEager",
     "GatedDeltaMemoryReference",
+    "GlobalSparseAttentionReference",
     "RoutedMoEReference",
     "SwiGLU",
     "TepidH1CausalLM",

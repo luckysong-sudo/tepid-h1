@@ -7,7 +7,6 @@ from tepid_h1.data import (
     character_ngrams,
     compare_corpora,
     corpus_digest,
-    load_corpus,
     normalize_text,
 )
 

@@ -9,21 +9,12 @@ from typing import Any
 
 from .config import TepidH1Config
 from .data import (
-    AuditFinding,
-    AuditReport,
-    BenchmarkSample,
-    ContaminationMatch,
-    CorpusStats,
-    DecontaminationReport,
-    SplitIsolationReport,
-    TextRecord,
     audit_inventory,
     benchmark_candidate,
     check_paired_corpus_isolation,
     compare_corpora,
     load_corpus,
     load_inventory,
-    load_paired_corpus_records,
     load_text_records,
     select_candidate,
     summarize_paired_corpus,
@@ -43,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tepid-h1")
     subparsers = parser.add_subparsers(dest="command", required=True)
     # Version command
-    parser.add_argument("--version", action="version", version=f"%(prog)s 0.2.0")
+    parser.add_argument("--version", action="version", version="%(prog)s 0.2.0")
     plan = subparsers.add_parser("plan", help="print the macro-block layer plan")
     plan.add_argument("--variant", choices=("prototype", "reference"), default="prototype")
     audit = subparsers.add_parser("data-audit", help="audit an M0 data inventory")
@@ -147,7 +138,17 @@ def build_parser() -> argparse.ArgumentParser:
     delta_validation.add_argument("--iterations", type=int, default=3)
     delta_validation.add_argument("--seed", type=int, default=71)
     delta_validation.add_argument("--target-device-label")
+    delta_validation.add_argument("--skip-gradients", action="store_true")
     delta_validation.add_argument("--report", type=Path)
+    moe_balance = subparsers.add_parser(
+        "moe-balance-report",
+        help="report smoke-model MoE routing balance",
+    )
+    moe_balance.add_argument("--batch-size", type=int, default=1)
+    moe_balance.add_argument("--sequence-length", type=int, default=8)
+    moe_balance.add_argument("--seed", type=int, default=97)
+    moe_balance.add_argument("--max-load-cv", type=float, default=0.25)
+    moe_balance.add_argument("--report", type=Path)
     comparison = subparsers.add_parser(
         "compare-smoke",
         help="train hybrid and matched baseline on identical governed or random-token batches",
@@ -590,11 +591,45 @@ def main() -> int:
                 iterations=args.iterations,
                 seed=args.seed,
                 target_device_label=args.target_device_label,
+                verify_gradients=not args.skip_gradients,
             )
         )
         payload["generated_at"] = datetime.now(timezone.utc).isoformat()
         _write_payload(payload, args.report)
         return 0 if payload["numerical_passed"] else 5
+    if args.command == "moe-balance-report":
+        if args.batch_size <= 0 or args.sequence_length <= 0:
+            raise ValueError("batch_size and sequence_length must be positive")
+        import torch
+
+        from .modeling.model import TepidH1Model
+
+        config = TepidH1Config.smoke()
+        torch.manual_seed(args.seed)
+        model = TepidH1Model(config).eval()
+        input_ids = torch.randint(
+            config.vocab_size,
+            (args.batch_size, args.sequence_length),
+        )
+        with torch.no_grad():
+            model(input_ids)
+        payload = {
+            "schema_version": 1,
+            "experiment": "moe_routing_smoke",
+            "interpretation": (
+                "Local smoke routing evidence; expert-parallel communication and production "
+                "batch behavior require a distributed target-hardware run."
+            ),
+            "config": {
+                "batch_size": args.batch_size,
+                "sequence_length": args.sequence_length,
+                "seed": args.seed,
+                "max_load_cv": args.max_load_cv,
+            },
+            "routing": model.moe_balance_report(max_load_cv=args.max_load_cv),
+        }
+        _write_payload(payload, args.report)
+        return 0 if payload["routing"]["passed"] else 4
     if args.command == "compare-smoke":
         from .experiments import (
             PairedExperimentConfig,

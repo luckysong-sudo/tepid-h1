@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
+from typing import TypeVar
 
 from .protocols import (
+    AgentAction,
     AgentModel,
     ContextBuilder,
     FinalAnswer,
     ModelValidationError,
-    PolicyDecision,
     PolicyEngine,
     RuntimeState,
     Telemetry,
@@ -18,15 +19,15 @@ from .protocols import (
     Verifier,
 )
 
+T = TypeVar("T")
+
 
 class BudgetExceeded(RuntimeError):
     """Raised when the agent exhausts its step budget."""
-    pass
 
 
 class RetryExhausted(RuntimeError):
     """Raised when an operation exceeds its retry limit."""
-    pass
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,7 @@ class AgentRuntime:
         state = RuntimeState(task=task, max_steps=max_steps)
 
         while state.can_proceed():
-            context = self.dependencies.context_builder.build(state)
+            context = self._run_with_retry(self.dependencies.context_builder.build, state)
             try:
                 action = self.dependencies.model.generate_action(context)
             except Exception as exc:
@@ -75,7 +76,9 @@ class AgentRuntime:
             state.record_action(action)
 
             if isinstance(action, FinalAnswer):
-                verdict = self.dependencies.verifier.verify_final(state, action)
+                verdict = self._run_with_retry(
+                    self.dependencies.verifier.verify_final, state, action
+                )
                 self._record(state, action, verdict)
                 if verdict.allowed:
                     return action
@@ -87,14 +90,14 @@ class AgentRuntime:
                     f"model emitted unsupported action type: {type(action)!r}"
                 )
 
-            decision = self.dependencies.policy.authorize(state, action)
+            decision = self._run_with_retry(self.dependencies.policy.authorize, state, action)
             if not decision.allowed:
                 observation = {"policy_denial": decision.reason, "call_id": action.call_id}
                 state.record_observation(observation)
                 self._record(state, action, observation)
                 continue
 
-            result = self.dependencies.tools.execute(action)
+            result = self._run_with_retry(self.dependencies.tools.execute, action)
             if result.call_id != action.call_id:
                 raise ModelValidationError(
                     "tool result call_id does not match the requested call"
@@ -107,8 +110,8 @@ class AgentRuntime:
         )
 
     def _run_with_retry(
-        self, operation: Callable[..., object], *args: object, **kwargs: object
-    ) -> object:
+        self, operation: Callable[..., T], *args: object, **kwargs: object
+    ) -> T:
         for attempt in range(self._max_retries + 1):
             try:
                 return operation(*args, **kwargs)
@@ -121,7 +124,8 @@ class AgentRuntime:
                     ) from exc
                 time.sleep(self._retry_backoff * (2 ** attempt))
 
-    def _record(self, state: RuntimeState, action: object, result: object) -> None:
+        raise AssertionError("retry loop did not execute")
+
+    def _record(self, state: RuntimeState, action: AgentAction, result: object) -> None:
         if self.dependencies.telemetry is not None:
             self.dependencies.telemetry.record(state, action, result)
-

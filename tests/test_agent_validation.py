@@ -79,8 +79,6 @@ class TestAgentRuntimeErrors:
 
     def test_model_exception_raises_model_validation_error(self):
         """Model exceptions should be wrapped as ModelValidationError."""
-        called_with = []
-
         class FailingModel:
             def generate_action(self, context):
                 raise RuntimeError("model crashed")

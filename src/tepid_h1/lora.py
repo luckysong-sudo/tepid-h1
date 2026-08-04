@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 
 @dataclass
@@ -71,7 +71,6 @@ class LoRALinear(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         base_output = self.base_layer(x)
-        lora_output = (self.lora_B @ (self.lora_A @ x.T)).T * self.scaling
         dropout = F.dropout(x, p=self.lora_dropout, training=self.training)
         return base_output + (self.lora_B @ (self.lora_A @ dropout.T)).T * self.scaling
 

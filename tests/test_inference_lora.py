@@ -1,17 +1,16 @@
 """Integration tests for InferenceEngine and LoRA adapter."""
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 from tepid_h1.config import TepidH1Config
 from tepid_h1.inference import GenerateConfig, InferenceEngine, decode_text
 from tepid_h1.lora import (
-    LoRAAdapter,
     LoRAConfig,
     apply_lora,
     freeze_base_model,
-    lora_param_count,
     get_lora_params,
+    lora_param_count,
 )
 from tepid_h1.modeling import TepidH1CausalLM
 
@@ -86,7 +85,7 @@ class TestInferenceEngine:
                 return " ".join(str(t) for t in tokens)
 
         input_ids = torch.tensor([[1, 2, 3]])
-        generated, metadata = engine.generate(
+        generated, _ = engine.generate(
             input_ids,
             config=GenerateConfig(
                 max_new_tokens=2,
@@ -176,7 +175,7 @@ class TestLoRA:
         """Test LoRA parameter counting."""
         # Use default target_modules that match simple_model's layer names
         config = LoRAConfig(r=4, lora_alpha=8.0, target_modules=["0", "2"])
-        adapter = apply_lora(simple_model, config)
+        apply_lora(simple_model, config)
 
         lora_params = get_lora_params(simple_model)
         assert len(lora_params) > 0
@@ -187,7 +186,7 @@ class TestLoRA:
     def test_freeze_base_model(self, simple_model):
         """Test freezing base model parameters."""
         config = LoRAConfig(r=4, lora_alpha=8.0)
-        adapter = apply_lora(simple_model, config)
+        apply_lora(simple_model, config)
         freeze_base_model(simple_model)
 
         for name, param in simple_model.named_parameters():
@@ -241,7 +240,7 @@ class TestInferenceLoRAIntegration:
         engine = InferenceEngine(adapter, config=inference_model.config, use_kv_cache=True)
 
         input_ids = torch.tensor([[1, 2, 3]])
-        generated, metadata = engine.generate(
+        generated, _ = engine.generate(
             input_ids,
             config=GenerateConfig(max_new_tokens=3, do_sample=False),
         )

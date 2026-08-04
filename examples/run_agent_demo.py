@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Tepid-H1 Agent Runtime Example
 
@@ -9,8 +8,9 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
+from typing import Any
 
-from src.tepid_h1.agent import (
+from tepid_h1.agent import (
     AgentRuntime,
     AllowlistPolicy,
     EvidenceVerifier,
@@ -18,22 +18,19 @@ from src.tepid_h1.agent import (
     ListTelemetry,
     RuntimeDependencies,
     StateContextBuilder,
+    ToolCall,
     ToolRegistry,
 )
-from src.tepid_h1.agent.protocols import ToolResult
 
 
 @dataclass
 class SimpleModel:
     """A mock model that generates simple responses."""
 
-    def generate_action(self, context: str) -> object:
-        # Return a tool call asking for the task
-        return type(
-            "ToolCall",
-            (),
-            {"call_id": "1", "tool_name": "compute", "arguments": {"task": context}},
-        )()
+    def generate_action(self, context: Any) -> ToolCall | FinalAnswer:
+        if not context.observations:
+            return ToolCall(call_id="1", tool_name="compute", arguments={"task": context.task})
+        return FinalAnswer(content="The answer is 4", evidence_call_ids=("1",))
 
 
 def main() -> int:
@@ -49,11 +46,8 @@ def run_agent(args: argparse.Namespace) -> int:
     # Setup tools
     tools = ToolRegistry()
 
-    def compute_tool(call: object) -> ToolResult:
-        return ToolResult(
-            call_id=getattr(call, "call_id", "1"),
-            content=f"The answer is 4",
-        )
+    def compute_tool(arguments: dict[str, Any]) -> str:
+        return "The answer is 4"
 
     tools.register("compute", compute_tool)
 
@@ -76,15 +70,11 @@ def run_agent(args: argparse.Namespace) -> int:
     # Run with retries
     runtime = AgentRuntime(deps, max_retries=args.max_retries)
 
-    try:
-        answer = runtime.run(args.task, max_steps=args.max_steps)
-        print(f"Task: {args.task}")
-        print(f"Answer: {answer.answer}")
-        print(f"Telemetry entries: {len(telemetry.entries)}")
-        return 0
-    except Exception as exc:
-        print(f"Agent failed: {exc!r}")
-        return 1
+    answer = runtime.run(args.task, max_steps=args.max_steps)
+    print(f"Task: {args.task}")
+    print(f"Answer: {answer.content}")
+    print(f"Telemetry entries: {len(telemetry.events)}")
+    return 0
 
 
 if __name__ == "__main__":

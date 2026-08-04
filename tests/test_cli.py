@@ -1,4 +1,3 @@
-import argparse
 import json
 import tempfile
 import unittest
@@ -99,19 +98,19 @@ class CLIParserTests(unittest.TestCase):
 
 class CLIIntegrationTests(unittest.TestCase):
     def test_plan_command_outputs_json(self):
-        import json
         import sys
         from io import StringIO
         from unittest.mock import patch
 
         from tepid_h1.cli import main
 
-        with patch.object(sys, "argv", ["tepid-h1", "plan"]):
-            with patch("sys.stdout", new=StringIO()) as mock_stdout:
-                result = main()
-                self.assertEqual(result, 0)
-                output = mock_stdout.getvalue()
-                plan = json.loads(output)
+        with patch.object(sys, "argv", ["tepid-h1", "plan"]), patch(
+            "sys.stdout", new=StringIO()
+        ) as mock_stdout:
+            result = main()
+            self.assertEqual(result, 0)
+            output = mock_stdout.getvalue()
+            plan = json.loads(output)
 
         self.assertIn("config", plan)
         self.assertIn("module_counts", plan)
@@ -125,6 +124,16 @@ class CLIIntegrationTests(unittest.TestCase):
         parser = build_parser()
         with self.assertRaises(SystemExit):
             parser.parse_args(["data-audit"])
+
+    def test_moe_balance_report_arguments(self):
+        from tepid_h1.cli import build_parser
+
+        args = build_parser().parse_args(
+            ["moe-balance-report", "--batch-size", "2", "--max-load-cv", "0.3"]
+        )
+
+        self.assertEqual(args.batch_size, 2)
+        self.assertEqual(args.max_load_cv, 0.3)
 
 
 if __name__ == "__main__":
