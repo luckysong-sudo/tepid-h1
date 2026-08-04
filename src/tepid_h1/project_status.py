@@ -139,6 +139,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
         evidence=(
             "Delta backend validation compares forward, state and gradients",
             "Delta benchmark matrix reports shape-level throughput and qualification status",
+            "Delta backend configs reject ambiguous integer controls before execution",
             "Delta benchmark cases now include stable shape roles, target-evidence flags and "
             "qualification-reason aggregates",
             "MoE benchmark matrix reports routing load, oracle parity and grouped throughput",

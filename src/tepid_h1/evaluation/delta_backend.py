@@ -25,6 +25,15 @@ class DeltaBackendValidationConfig:
     target_device_label: str | None = None
 
     def __post_init__(self) -> None:
+        batch_size = _validate_delta_int("batch_size", self.batch_size)
+        object.__setattr__(self, "batch_size", batch_size)
+        sequence_length = _validate_delta_int("sequence_length", self.sequence_length)
+        object.__setattr__(self, "sequence_length", sequence_length)
+        iterations = _validate_delta_int("iterations", self.iterations)
+        object.__setattr__(self, "iterations", iterations)
+        seed = _validate_delta_int("seed", self.seed)
+        object.__setattr__(self, "seed", seed)
+
         if self.backend not in {"eager", "inductor"}:
             raise ValueError("backend must be 'eager' or 'inductor'")
         if self.device not in {"cpu", "cuda"}:
@@ -33,11 +42,11 @@ class DeltaBackendValidationConfig:
             raise ValueError("dtype must be float32, bfloat16 or float16")
         if self.device == "cpu" and self.dtype != "float32":
             raise ValueError("CPU Delta validation currently requires float32")
-        if self.batch_size <= 0:
+        if batch_size <= 0:
             raise ValueError("batch_size must be positive")
-        if not 2 <= self.sequence_length <= 64:
+        if not 2 <= sequence_length <= 64:
             raise ValueError("sequence_length must be between 2 and 64")
-        if not 1 <= self.iterations <= 100:
+        if not 1 <= iterations <= 100:
             raise ValueError("iterations must be between 1 and 100")
         if self.target_device_label is not None and not self.target_device_label.strip():
             raise ValueError("target_device_label must be non-empty when provided")
@@ -55,9 +64,16 @@ class DeltaBackendBenchmarkConfig:
     target_device_label: str | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.sequence_lengths, tuple):
+            raise TypeError("sequence_lengths must be a tuple")
         if not self.sequence_lengths:
             raise ValueError("sequence_lengths must not be empty")
-        for sequence_length in self.sequence_lengths:
+        sequence_lengths = tuple(
+            _validate_delta_int("sequence_lengths", sequence_length)
+            for sequence_length in self.sequence_lengths
+        )
+        object.__setattr__(self, "sequence_lengths", sequence_lengths)
+        for sequence_length in sequence_lengths:
             if not 2 <= sequence_length <= 64:
                 raise ValueError("sequence_lengths must be between 2 and 64")
         DeltaBackendValidationConfig(
@@ -70,6 +86,12 @@ class DeltaBackendBenchmarkConfig:
             seed=self.seed,
             target_device_label=self.target_device_label,
         )
+
+
+def _validate_delta_int(name: str, value: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer")
+    return value
 
 
 def benchmark_delta_backend(config: DeltaBackendBenchmarkConfig) -> dict[str, Any]:

@@ -42,6 +42,18 @@ class DeltaBackendValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "target_device_label"):
             DeltaBackendValidationConfig(target_device_label=" ")
 
+    def test_validation_config_rejects_ambiguous_integer_controls(self):
+        from tepid_h1.evaluation.delta_backend import DeltaBackendValidationConfig
+
+        with self.assertRaisesRegex(TypeError, "batch_size"):
+            DeltaBackendValidationConfig(batch_size=True)
+        with self.assertRaisesRegex(TypeError, "sequence_length"):
+            DeltaBackendValidationConfig(sequence_length=4.0)  # type: ignore[arg-type]
+        with self.assertRaisesRegex(TypeError, "iterations"):
+            DeltaBackendValidationConfig(iterations=False)
+        with self.assertRaisesRegex(TypeError, "seed"):
+            DeltaBackendValidationConfig(seed="71")  # type: ignore[arg-type]
+
     def test_benchmark_matrix_reports_shape_level_timing(self):
         from tepid_h1.evaluation.delta_backend import (
             DeltaBackendBenchmarkConfig,
@@ -109,6 +121,12 @@ class DeltaBackendValidationTests(unittest.TestCase):
             DeltaBackendBenchmarkConfig(sequence_lengths=())
         with self.assertRaisesRegex(ValueError, "sequence_lengths"):
             DeltaBackendBenchmarkConfig(sequence_lengths=(1,))
+        with self.assertRaisesRegex(TypeError, "sequence_lengths"):
+            DeltaBackendBenchmarkConfig(sequence_lengths=[2])  # type: ignore[arg-type]
+        with self.assertRaisesRegex(TypeError, "sequence_lengths"):
+            DeltaBackendBenchmarkConfig(sequence_lengths=(True,))
+        with self.assertRaisesRegex(TypeError, "iterations"):
+            DeltaBackendBenchmarkConfig(iterations=True)
 
 
 if __name__ == "__main__":
