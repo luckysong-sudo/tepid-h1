@@ -173,7 +173,10 @@ class TestModelTypeAnnotations:
         model(torch.randint(0, 128, (1, 4)))
 
         report = model.moe_balance_report()
+        counts = model.moe_router_counts()
 
         assert report["moe_layers"] > 0
         assert report["observed_layers"] > 0
         assert "load_cv" in report
+        assert counts is not None
+        assert counts.sum() > 0

@@ -56,7 +56,7 @@ def run_evaluation(args: argparse.Namespace) -> int:
     # Score
     answers = load_answer_key(args.answers)
     result = score_retrieval(answers, predictions)
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Accuracy: {result['accuracy']:.2%}")
     print(f"  Coverage: {result['coverage']:.2%}")
     print(f"  Passed: {result['passed']}")

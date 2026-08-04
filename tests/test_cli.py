@@ -129,10 +129,11 @@ class CLIIntegrationTests(unittest.TestCase):
         from tepid_h1.cli import build_parser
 
         args = build_parser().parse_args(
-            ["moe-balance-report", "--batch-size", "2", "--max-load-cv", "0.3"]
+            ["moe-balance-report", "--batch-size", "2", "--steps", "3", "--max-load-cv", "0.3"]
         )
 
         self.assertEqual(args.batch_size, 2)
+        self.assertEqual(args.steps, 3)
         self.assertEqual(args.max_load_cv, 0.3)
 
 

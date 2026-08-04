@@ -1,12 +1,9 @@
 """Demonstration of Tepid-H1 agent runtime."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 from tepid_h1 import (
     AgentRuntime,
     FinalAnswer,
-    ModelValidationError,
     RuntimeDependencies,
     RuntimeState,
     ToolCall,

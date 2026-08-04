@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Example training script for Tepid-H1."""
 from __future__ import annotations
 
@@ -6,11 +7,11 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from tepid_h1 import (
+    MixedPrecisionConfig,
+    MixedPrecisionManager,
     TepidH1CausalLM,
     TepidH1Config,
     apply_gradient_checkpointing,
-    MixedPrecisionConfig,
-    MixedPrecisionManager,
     log_training_step,
 )
 

@@ -108,6 +108,23 @@ class TepidH1Model(nn.Module):
 
     def moe_balance_report(self, *, max_load_cv: float = 0.25) -> dict[str, Any]:
         """Aggregate the most recent routing counts across MoE layers."""
+        aggregate = self.moe_router_counts()
+        moe_layers = sum(isinstance(layer.channel_mixer, RoutedMoEReference) for layer in self.layers)
+        if aggregate is None:
+            return {"moe_layers": moe_layers, "observed_layers": 0, "passed": False}
+        result = MoERouterStats(aggregate, torch.empty(0, device=aggregate.device)).balance_report(
+            max_load_cv=max_load_cv
+        )
+        result["moe_layers"] = moe_layers
+        result["observed_layers"] = sum(
+            isinstance(layer.channel_mixer, RoutedMoEReference)
+            and layer.channel_mixer.last_router_stats is not None
+            for layer in self.layers
+        )
+        return result
+
+    def moe_router_counts(self) -> Tensor | None:
+        """Return aggregate assignments from the latest forward pass across MoE layers."""
         counts = [
             layer.channel_mixer.last_router_stats.expert_counts
             for layer in self.layers
@@ -115,16 +132,8 @@ class TepidH1Model(nn.Module):
             and layer.channel_mixer.last_router_stats is not None
         ]
         if not counts:
-            return {"moe_layers": 0, "observed_layers": 0, "passed": False}
-        aggregate = torch.stack(counts).sum(dim=0)
-        result = MoERouterStats(aggregate, torch.empty(0, device=aggregate.device)).balance_report(
-            max_load_cv=max_load_cv
-        )
-        result["moe_layers"] = sum(
-            isinstance(layer.channel_mixer, RoutedMoEReference) for layer in self.layers
-        )
-        result["observed_layers"] = len(counts)
-        return result
+            return None
+        return torch.stack(counts).sum(dim=0)
 
     def forward(
         self,

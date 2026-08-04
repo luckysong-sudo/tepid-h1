@@ -146,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     moe_balance.add_argument("--batch-size", type=int, default=1)
     moe_balance.add_argument("--sequence-length", type=int, default=8)
+    moe_balance.add_argument("--steps", type=int, default=1)
     moe_balance.add_argument("--seed", type=int, default=97)
     moe_balance.add_argument("--max-load-cv", type=float, default=0.25)
     moe_balance.add_argument("--report", type=Path)
@@ -598,21 +599,33 @@ def main() -> int:
         _write_payload(payload, args.report)
         return 0 if payload["numerical_passed"] else 5
     if args.command == "moe-balance-report":
-        if args.batch_size <= 0 or args.sequence_length <= 0:
-            raise ValueError("batch_size and sequence_length must be positive")
+        if args.batch_size <= 0 or args.sequence_length <= 0 or args.steps <= 0:
+            raise ValueError("batch_size, sequence_length and steps must be positive")
         import torch
 
+        from .modeling.layers import MoERouterStats, RoutedMoEReference
         from .modeling.model import TepidH1Model
 
         config = TepidH1Config.smoke()
         torch.manual_seed(args.seed)
         model = TepidH1Model(config).eval()
-        input_ids = torch.randint(
-            config.vocab_size,
-            (args.batch_size, args.sequence_length),
-        )
+        counts = None
         with torch.no_grad():
-            model(input_ids)
+            for _ in range(args.steps):
+                input_ids = torch.randint(
+                    config.vocab_size,
+                    (args.batch_size, args.sequence_length),
+                )
+                model(input_ids)
+                step_counts = model.moe_router_counts()
+                if step_counts is None:
+                    raise RuntimeError("smoke model did not produce MoE routing statistics")
+                counts = step_counts if counts is None else counts + step_counts
+        routing = MoERouterStats(counts, torch.empty(0)).balance_report(max_load_cv=args.max_load_cv)
+        routing["moe_layers"] = sum(
+            isinstance(layer.channel_mixer, RoutedMoEReference) for layer in model.layers
+        )
+        routing["observed_layers"] = routing["moe_layers"]
         payload = {
             "schema_version": 1,
             "experiment": "moe_routing_smoke",
@@ -623,10 +636,11 @@ def main() -> int:
             "config": {
                 "batch_size": args.batch_size,
                 "sequence_length": args.sequence_length,
+                "steps": args.steps,
                 "seed": args.seed,
                 "max_load_cv": args.max_load_cv,
             },
-            "routing": model.moe_balance_report(max_load_cv=args.max_load_cv),
+            "routing": routing,
         }
         _write_payload(payload, args.report)
         return 0 if payload["routing"]["passed"] else 4

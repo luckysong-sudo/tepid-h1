@@ -1,13 +1,14 @@
+#!/usr/bin/env python3
 """Demonstration of Tepid-H1 model capabilities."""
 from __future__ import annotations
 
 import torch
 
 from tepid_h1 import (
-    GQAAttentionNative,
-    GQAAttentionReference,
     GatedDeltaMemoryEager,
     GatedDeltaMemoryReference,
+    GQAAttentionNative,
+    GQAAttentionReference,
     TepidH1CausalLM,
     TepidH1Config,
 )
@@ -66,7 +67,7 @@ def demo_attention_layers() -> None:
 
 def demo_gradient_checkpointing() -> None:
     """Demo gradient checkpointing."""
-    from tepid_h1 import apply_gradient_checkpointing, TepidH1Config
+    from tepid_h1 import TepidH1Config, apply_gradient_checkpointing
 
     config = TepidH1Config.prototype()
     model = TepidH1CausalLM(config)
@@ -83,9 +84,7 @@ def demo_gradient_checkpointing() -> None:
 
 def demo_mixed_precision() -> None:
     """Demo mixed precision training."""
-    from tepid_h1 import MixedPrecisionConfig, MixedPrecisionManager, TepidH1Config
-
-    config = TepidH1Config.prototype()
+    from tepid_h1 import MixedPrecisionConfig, MixedPrecisionManager
     manager = MixedPrecisionManager(MixedPrecisionConfig.autocast())
 
     print("Mixed precision manager created:")
