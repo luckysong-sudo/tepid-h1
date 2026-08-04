@@ -85,3 +85,30 @@ class TestMixedPrecisionManager:
 
         # Should not raise
         manager.step(optimizer)
+
+    def test_to_device_cpu(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig(enabled=False)
+        manager = MixedPrecisionManager(config)
+
+        tensor = torch.randn(3, 4)
+        result = manager.to_device(tensor, torch.device("cpu"))
+        assert result.shape == (3, 4)
+
+    def test_state_dict_round_trip(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig()
+        manager = MixedPrecisionManager(config)
+        state = manager.state_dict()
+        assert state["config"]["enabled"] is True
+        assert state["config"]["mode"] == "bfloat16"
+
+    def test_load_state_dict_restores_config(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        manager = MixedPrecisionManager(MixedPrecisionConfig())
+        manager.load_state_dict({"config": {"enabled": False, "mode": "fp32", "grad_scaler": True}})
+        assert manager.config.enabled is False
+        assert manager.config.mode.value == "fp32"
