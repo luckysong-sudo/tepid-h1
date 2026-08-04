@@ -147,12 +147,33 @@ class TestInferenceEngine:
             GenerateConfig(top_k=1.5)
         with pytest.raises(TypeError, match="top_k"):
             GenerateConfig(top_k=True)
+        with pytest.raises(TypeError, match="temperature"):
+            GenerateConfig(temperature=True)
+        with pytest.raises(TypeError, match="top_p"):
+            GenerateConfig(top_p="0.9")  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="repetition_penalty"):
+            GenerateConfig(repetition_penalty=object())  # type: ignore[arg-type]
         with pytest.raises(TypeError, match="num_return_sequences"):
             GenerateConfig(num_return_sequences=1.0)
         with pytest.raises(TypeError, match="num_return_sequences"):
             GenerateConfig(num_return_sequences=False)
         with pytest.raises(TypeError, match="do_sample"):
             GenerateConfig(do_sample=1)
+
+    def test_generate_config_rejects_non_finite_sampling_controls(self):
+        with pytest.raises(ValueError, match="temperature"):
+            GenerateConfig(temperature=float("inf"))
+        with pytest.raises(ValueError, match="top_p"):
+            GenerateConfig(top_p=float("nan"))
+        with pytest.raises(ValueError, match="repetition_penalty"):
+            GenerateConfig(repetition_penalty=float("-inf"))
+
+    def test_generate_config_normalizes_integral_sampling_controls(self):
+        config = GenerateConfig(temperature=1, top_p=1, repetition_penalty=1)
+
+        assert config.temperature == 1.0
+        assert config.top_p == 1.0
+        assert config.repetition_penalty == 1.0
 
     def test_cuda_generation_requires_available_runtime(self):
         if torch.cuda.is_available():

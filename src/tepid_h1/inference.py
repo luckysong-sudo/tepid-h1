@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -41,16 +42,30 @@ class GenerateConfig:
             raise TypeError("max_new_tokens must be an integer")
         if self.max_new_tokens <= 0:
             raise ValueError("max_new_tokens must be positive")
-        if not 0.0 < self.temperature:
+
+        temperature = _validate_sampling_float("temperature", self.temperature)
+        object.__setattr__(self, "temperature", temperature)
+        if not 0.0 < temperature:
             raise ValueError("temperature must be positive")
-        if not 0.0 <= self.top_p <= 1.0:
+
+        top_p = _validate_sampling_float("top_p", self.top_p)
+        object.__setattr__(self, "top_p", top_p)
+        if not 0.0 <= top_p <= 1.0:
             raise ValueError("top_p must be in [0, 1]")
+
         if not isinstance(self.top_k, int) or isinstance(self.top_k, bool):
             raise TypeError("top_k must be an integer")
         if self.top_k < 0:
             raise ValueError("top_k must be non-negative")
-        if not 1.0 <= self.repetition_penalty <= 2.0:
+
+        repetition_penalty = _validate_sampling_float(
+            "repetition_penalty",
+            self.repetition_penalty,
+        )
+        object.__setattr__(self, "repetition_penalty", repetition_penalty)
+        if not 1.0 <= repetition_penalty <= 2.0:
             raise ValueError("repetition_penalty must be in [1.0, 2.0]")
+
         if not isinstance(self.num_return_sequences, int) or isinstance(
             self.num_return_sequences, bool
         ):
@@ -65,6 +80,15 @@ class GenerateConfig:
             raise ValueError("dtype must be float32, bfloat16 or float16")
         if self.device == "cpu" and self.dtype != "float32":
             raise ValueError("CPU generation only supports float32 dtype")
+
+
+def _validate_sampling_float(name: str, value: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a finite number")
+    normalized = float(value)
+    if not math.isfinite(normalized):
+        raise ValueError(f"{name} must be finite")
+    return normalized
 
 
 class InferenceEngine:

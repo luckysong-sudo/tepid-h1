@@ -124,6 +124,7 @@ DIMENSIONS: tuple[StatusDimension, ...] = (
             "generation keyword overrides are applied by explicit presence, not default values",
             "generation validates prompt shape, dtype and token range before model execution",
             "generation rejects context lengths beyond model and reference-kernel limits",
+            "generation sampling controls reject boolean, non-numeric and non-finite values",
             "attention cache loading and updates validate tensor shape, length and dtype",
         ),
         gaps=(
