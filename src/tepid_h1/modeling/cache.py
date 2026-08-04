@@ -48,42 +48,47 @@ class AttentionCache:
         *,
         cache_length: int | None = None,
     ) -> tuple[Tensor, Tensor]:
-        if k_new.shape[-2] != v_new.shape[-2]:
+        seq_dim = 1
+        if k_new.shape[seq_dim] != v_new.shape[seq_dim]:
             raise ValueError("key and value sequences must have equal length")
-        if k_new.ndim != 3:
-            raise ValueError(f"expected 3D tensors, got {k_new.ndim}D")
+        if k_new.ndim < 3:
+            raise ValueError(f"expected at least 3D tensors, got {k_new.ndim}D")
         if k_new.shape[0] != v_new.shape[0]:
             raise ValueError("batch dimensions must match")
         if k_new.dtype != v_new.dtype:
             raise ValueError("key and value dtypes must match")
         if cache_length is None:
-            cache_length = k_new.shape[-2]
+            cache_length = self.seq_len + k_new.shape[seq_dim]
         if cache_length <= 0:
             raise ValueError("cache_length must be positive")
+        if cache_length < k_new.shape[seq_dim]:
+            raise ValueError("cache_length must accommodate the full sequence")
 
         if self.k_cache is None:
             self.k_cache = k_new
             self.v_cache = v_new
-            self.seq_len = k_new.shape[-2]
+            self.seq_len = k_new.shape[seq_dim]
+            self.device = k_new.device
+            self.dtype = k_new.dtype
             return k_new, v_new
 
-        max_seq_len = self.k_cache.shape[-2] + k_new.shape[-2]
+        max_seq_len = self.k_cache.shape[seq_dim] + k_new.shape[seq_dim]
         if max_seq_len > cache_length:
             shift = max_seq_len - cache_length
-            if shift >= max_seq_len:
-                raise ValueError("cache_length must accommodate the full sequence")
-            k_new = k_new[:, :, shift:]
-            v_new = v_new[:, :, shift:]
-            if k_new.shape[-2] == 0 or v_new.shape[-2] == 0:
+            slices = [slice(None)] * k_new.ndim
+            slices[seq_dim] = slice(shift, None)
+            k_new = k_new[tuple(slices)]
+            v_new = v_new[tuple(slices)]
+            if k_new.shape[seq_dim] == 0 or v_new.shape[seq_dim] == 0:
                 return self.k_cache, self.v_cache
 
         prev_k = self.k_cache
         prev_v = self.v_cache
-        new_k = torch.cat([prev_k, k_new], dim=-2)
-        new_v = torch.cat([prev_v, v_new], dim=-2)
+        new_k = torch.cat([prev_k, k_new], dim=seq_dim)
+        new_v = torch.cat([prev_v, v_new], dim=seq_dim)
         self.k_cache = new_k
         self.v_cache = new_v
-        self.seq_len = new_k.shape[-2]
+        self.seq_len = new_k.shape[seq_dim]
         return new_k, new_v
 
     def reset(self) -> None:
@@ -117,14 +122,14 @@ class AttentionCache:
             k_cache = torch.as_tensor(k_cache)
         if v_cache is not None:
             v_cache = torch.as_tensor(v_cache)
-        if k_cache is not None and v_cache is not None and k_cache.shape[-2] != v_cache.shape[-2]:
+        if k_cache is not None and v_cache is not None and k_cache.shape[1] != v_cache.shape[1]:
             raise ValueError("cached key and value sequences must have equal length")
         self.seq_len = seq_len
         self.device = torch.device(device_str)
-        self.dtype = torch.tensor(0.0, dtype={
+        self.dtype = {
             "float32": torch.float32,
             "float16": torch.float16,
             "bfloat16": torch.bfloat16,
-        }.get(dtype_str, torch.float32))
+        }.get(dtype_str, torch.float32)
         self.k_cache = k_cache
         self.v_cache = v_cache
