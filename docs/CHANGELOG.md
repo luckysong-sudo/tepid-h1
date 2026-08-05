@@ -12,6 +12,11 @@ All notable changes to the Tepid-H1 project will be documented in this file.
 - CLI examples and demonstration scripts
 - CI/CD pipeline with GitHub Actions
 - Pre-commit hooks for code quality
+- Retrieval evaluation suite with validation tests
+- Mixed precision training utilities
+- LoRA adapter with fan-in/fan-out support
+- KV-cache implementation for efficient inference
+- Comprehensive test coverage for quantization, training, and cache modules
 
 ### Fixed
 - Type annotation for `attn_bias` parameter in `model.py`
@@ -19,12 +24,16 @@ All notable changes to the Tepid-H1 project will be documented in this file.
 - Unified `self` type hints in `layers.py` to use `nn.Module`
 - Removed duplicate exports in `data/__init__.py`
 - Fixed syntax errors in test files
+- Fixed retrieval evaluation test assertions
 
 ### Improved
 - Enhanced protocol validation in agent system
 - Added explicit `__all__` exports across modules
 - Improved error handling with custom exception classes
 - Added comprehensive test coverage
+- Increased test coverage from 87% to 89%
+- Added validation tests for attention state shape and type checking
+- Added scheduler state validation in training checkpoint load
 
 ## [0.1.0] - 2026-07-31
 
