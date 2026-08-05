@@ -379,6 +379,61 @@ class ModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "same device and dtype"):
             layer(x, state)
 
+    def test_delta_layer_rejects_attention_state(self):
+        from tepid_h1.config import TepidH1Config, SequenceMixer, ChannelMixer
+        from tepid_h1.modeling.model import TepidH1Block
+        from tepid_h1.modeling.layers import AttentionState
+
+        config = TepidH1Config.smoke()
+        delta_seq = config.layer_plan[0].sequence
+        delta_ch = config.layer_plan[0].channel
+        block = TepidH1Block(config, sequence=delta_seq, channel=delta_ch)
+
+        x = torch.randn(1, 2, config.hidden_size)
+        attention_state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, 2, config.head_dim),
+            value=torch.randn(1, config.num_kv_heads, 2, config.head_dim),
+            tokens_seen=2,
+        )
+
+        # Delta layers should reject attention state
+        with self.assertRaisesRegex(ValueError, "Delta layers do not accept attention state"):
+            block(x, delta_state=None, attention_state=attention_state)
+
+    def test_attention_layer_rejects_delta_state(self):
+        from tepid_h1.config import TepidH1Config, SequenceMixer, ChannelMixer
+        from tepid_h1.modeling.model import TepidH1Block
+
+        config = TepidH1Config.smoke()
+        # Find an attention layer
+        attention_seq = None
+        for layer_def in config.layer_plan:
+            if layer_def.sequence is not None and layer_def.sequence in (SequenceMixer.LOCAL_ATTENTION, SequenceMixer.GLOBAL_SPARSE_ATTENTION):
+                attention_seq = layer_def.sequence
+                break
+
+        if attention_seq is not None:
+            attention_ch = config.layer_plan[0].channel
+            block = TepidH1Block(config, sequence=attention_seq, channel=attention_ch)
+
+            x = torch.randn(1, 2, config.hidden_size)
+            delta_state = torch.randn(1, 2, config.hidden_size)
+
+            # Attention layers should reject delta state
+            with self.assertRaisesRegex(ValueError, "attention layers do not accept Delta state"):
+                block(x, delta_state=delta_state)
+
+    def test_model_moe_report_when_no_moe_layers(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.model import TepidH1Model
+
+        config = TepidH1Config.smoke()
+        model = TepidH1Model(config)
+        model(torch.randint(0, 128, (1, 4)))
+
+        report = model.moe_balance_report()
+        assert report["moe_layers"] > 0  # smoke config has MoE layers
+
     def test_moe_balance_report_rejects_negative_max_load_cv(self):
         from tepid_h1.modeling.layers import MoERouterStats
 
