@@ -556,6 +556,30 @@ class TrainingTests(unittest.TestCase):
             with self.assertRaisesRegex(TypeError, "rng_state"):
                 load_checkpoint(checkpoint, model=restored_model, optimizer=restored_optimizer)
 
+    def test_evaluate_causal_lm_requires_batches(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import evaluate_causal_lm
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+
+        with self.assertRaisesRegex(ValueError, "at least one batch"):
+            evaluate_causal_lm(model, ())
+
+    def test_serialized_model_config_for_baseline(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.baseline import TransformerBaselineConfig
+        from tepid_h1.modeling import TransformerBaselineCausalLM
+        from tepid_h1.training import _serialized_model_config
+
+        config = TransformerBaselineConfig.active_parameter_matched(TepidH1Config.smoke())
+        model = TransformerBaselineCausalLM(config)
+        serialized = _serialized_model_config(model)
+        self.assertIn("architecture", serialized)
+        self.assertIn("model", serialized)
+        self.assertIn("vocab_size", serialized["model"])
+
 
 if __name__ == "__main__":
     unittest.main()
