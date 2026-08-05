@@ -479,6 +479,32 @@ class TrainingTests(unittest.TestCase):
         metrics = causal_lm_train_step(model, input_ids, optimizer)
         self.assertEqual(metrics.trained_tokens, 7)
 
+    def test_scheduler_validates_total_steps_type(self):
+        import torch
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import WarmupCosineScheduler
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+
+        with self.assertRaisesRegex(TypeError, "total_steps"):
+            WarmupCosineScheduler(optimizer, warmup_steps=2, total_steps="10")
+
+    def test_scheduler_validates_min_lr_ratio(self):
+        import torch
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import WarmupCosineScheduler
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+
+        with self.assertRaisesRegex(ValueError, "between zero and one"):
+            WarmupCosineScheduler(optimizer, warmup_steps=2, total_steps=10, min_lr_ratio=-0.1)
+
 
 if __name__ == "__main__":
     unittest.main()
