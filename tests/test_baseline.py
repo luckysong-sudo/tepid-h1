@@ -59,6 +59,16 @@ class BaselineModelTests(unittest.TestCase):
         self.assertTrue(torch.isfinite(output.loss))
         self.assertGreater(metrics.gradient_norm, 0)
 
+    def test_baseline_rejects_1d_input(self):
+        from tepid_h1.modeling import TransformerBaselineCausalLM
+
+        config = TransformerBaselineConfig.active_parameter_matched(TepidH1Config.smoke())
+        model = TransformerBaselineCausalLM(config)
+        input_ids = torch.randint(0, config.model.vocab_size, (7,))
+
+        with self.assertRaisesRegex(ValueError, "shape"):
+            model(input_ids)
+
     def test_baseline_chunked_forward_matches_single_pass(self):
         from tepid_h1.modeling import TransformerBaselineCausalLM
 

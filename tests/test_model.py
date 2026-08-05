@@ -379,6 +379,16 @@ class ModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "same device and dtype"):
             layer(x, state)
 
+    def test_moe_balance_report_rejects_negative_max_load_cv(self):
+        from tepid_h1.modeling.layers import MoERouterStats
+
+        stats = MoERouterStats(
+            expert_counts=torch.tensor([10, 10, 10, 10]),
+            router_probabilities=torch.empty(0),
+        )
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            stats.balance_report(max_load_cv=-0.1)
+
 
 if __name__ == "__main__":
     unittest.main()
