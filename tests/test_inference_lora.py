@@ -320,6 +320,28 @@ class TestInferenceLoRAIntegration:
         assert "r=2" in repr_str
         assert "alpha=4.0" in repr_str
 
+    def test_lora_unmerge_weights(self):
+        """Test LoRA unmerge weights restores base weights."""
+        model = nn.Linear(8, 4)
+        config = LoRAConfig(r=2, lora_alpha=4.0, merge_weights=True)
+        adapter = apply_lora(model, config)
+
+        # Set some non-zero LoRA values
+        for child in model.modules():
+            if hasattr(child, 'lora_A'):
+                child.lora_A.data.fill_(0.5)
+                child.lora_B.data.fill_(0.5)
+
+        # Merge and then unmerge
+        adapter.merge_weights()
+        adapter.unmerge_weights()
+
+        # After unmerge, LoRA params should be reset to zero
+        for child in model.modules():
+            if hasattr(child, 'lora_A'):
+                assert torch.allclose(child.lora_A, torch.zeros_like(child.lora_A))
+                assert torch.allclose(child.lora_B, torch.zeros_like(child.lora_B))
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
