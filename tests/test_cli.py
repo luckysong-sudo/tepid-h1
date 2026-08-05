@@ -249,6 +249,42 @@ class CLIIntegrationTests(unittest.TestCase):
             Path(prompts.name).unlink(missing_ok=True)
             Path(answers.name).unlink(missing_ok=True)
 
+    def test_data_audit_command_valid_inventory(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode='w') as f:
+            f.write(open('configs/data_inventory.example.json').read())
+            f.flush()
+            inventory_path = f.name
+
+        with patch.object(sys, "argv", ["tepid-h1", "data-audit", inventory_path]):
+            result = main()
+
+        self.assertEqual(result, 0)
+        Path(inventory_path).unlink(missing_ok=True)
+
+    def test_corpus_stats_command_valid_file(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False, mode='w') as f:
+            f.write('{"id": "1", "source_id": "test", "domain": "en", "token_ids": [1, 2, 3]}\n')
+            f.flush()
+            corpus_path = f.name
+
+        with patch.object(sys, "argv", ["tepid-h1", "corpus-stats", corpus_path]):
+            result = main()
+
+        self.assertEqual(result, 0)
+        Path(corpus_path).unlink(missing_ok=True)
+
     def test_delta_validate_skip_gradients_produces_report(self):
         import json
         import sys
