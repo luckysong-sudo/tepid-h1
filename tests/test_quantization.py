@@ -235,3 +235,49 @@ class TestSaveQuantizedModel:
         assert "1" not in result
         assert "0" in result
         assert "2" in result
+
+    def test_scale_and_quantize_without_zeros(self) -> None:
+        from tepid_h1.quantization import _scale_and_quantize
+        import torch
+
+        weight = torch.tensor([[1.0, 2.0, 3.0, 4.0]])
+        scales = torch.tensor([0.03])
+        quantized = _scale_and_quantize(weight, scales, None, -128, 127)
+        assert quantized.shape == weight.shape
+
+    def test_scale_and_quantize_with_zeros(self) -> None:
+        from tepid_h1.quantization import _scale_and_quantize
+        import torch
+
+        weight = torch.tensor([[1.0, 2.0, 3.0, 4.0]])
+        scales = torch.tensor([0.03])
+        zeros = torch.tensor([0.5])
+        quantized = _scale_and_quantize(weight, scales, zeros, -128, 127)
+        assert quantized.shape == weight.shape
+
+    def test_per_tensor_scale_symmetric(self) -> None:
+        from tepid_h1.quantization import _per_tensor_scale
+        import torch
+
+        weight = torch.randn(4, 8)
+        scale = _per_tensor_scale(weight, -128, 127, symmetric=True)
+        assert scale.dim() == 0
+        assert scale > 0
+
+    def test_per_tensor_scale_asymmetric(self) -> None:
+        from tepid_h1.quantization import _per_tensor_scale
+        import torch
+
+        weight = torch.randn(4, 8)
+        scale = _per_tensor_scale(weight, 0, 255, symmetric=False)
+        assert scale.dim() == 0
+        assert scale > 0
+
+    def test_dequantize_tensor_with_zero_scales(self) -> None:
+        from tepid_h1.quantization import _dequantize_tensor
+        import torch
+
+        quantized = torch.tensor([[1, 2, 3]], dtype=torch.int8)
+        scales = torch.tensor([[0.01, 0.02, 0.03]])
+        result = _dequantize_tensor(quantized.float(), scales, None, torch.float32, 128)
+        assert result.shape == quantized.shape
