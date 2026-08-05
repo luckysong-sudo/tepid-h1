@@ -450,6 +450,35 @@ class TrainingTests(unittest.TestCase):
             with self.assertRaisesRegex((ValueError, Exception), ""):
                 load_checkpoint(checkpoint, model=model, optimizer=optimizer)
 
+    def test_train_step_returns_correct_trained_tokens(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import causal_lm_train_step
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        input_ids = torch.randint(0, config.vocab_size, (1, 8))
+        labels = input_ids.clone()
+        labels[0, -1] = -100  # Ignore last token
+
+        metrics = causal_lm_train_step(model, input_ids, optimizer, labels=labels)
+        # targets[:, 1:] drops the first element, so we expect 6 trained tokens
+        self.assertEqual(metrics.trained_tokens, 6)
+
+    def test_train_step_uses_input_ids_when_labels_none(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import causal_lm_train_step
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        input_ids = torch.randint(0, config.vocab_size, (1, 8))
+
+        metrics = causal_lm_train_step(model, input_ids, optimizer)
+        self.assertEqual(metrics.trained_tokens, 7)
+
 
 if __name__ == "__main__":
     unittest.main()
