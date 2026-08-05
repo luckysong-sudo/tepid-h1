@@ -357,3 +357,33 @@ class TestSaveQuantizedModel:
         result = _dequantize_tensor(quantized, scales, None, torch.float32, 128)
         assert result.shape == (2, 0)
         assert result.dtype == torch.float32
+
+    def test_int8_asymmetric_quantization(self) -> None:
+        linear = nn.Linear(8, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=False, group_size=4)
+        ql = QuantizedLayer.from_linear(linear, cfg)
+        assert ql.weight.dtype == torch.int8
+        assert ql.zeros is not None
+        assert ql.zeros.shape == (4, 2, 1)
+
+    def test_int4_asymmetric_quantization(self) -> None:
+        linear = nn.Linear(8, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT4, symmetric=False, group_size=4)
+        ql = QuantizedLayer.from_linear(linear, cfg)
+        assert ql.weight.dtype == torch.uint8
+        assert ql.zeros is not None
+
+    def test_estimate_quantized_size_fp8(self) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.FP8)
+        sizes = estimate_quantized_size(model, cfg)
+        # FP8 should use 1 byte per weight element
+        assert sizes["weight_bytes"] == 32  # 8*4 = 32
+
+    def test_apply_quantized_model_with_bias_replacement(self) -> None:
+        model = nn.Linear(8, 4, bias=True)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        qlayers = quantize_model(model, cfg)
+        apply_quantized_model(model, qlayers)
+        assert model.bias is not None
+        assert model.bias.shape == (4,)
