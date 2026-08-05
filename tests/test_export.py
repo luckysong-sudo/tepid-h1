@@ -86,6 +86,14 @@ class TestModelExporter:
         assert "onnx" in exports
         assert "safetensors" in exports
 
+    def test_export_for_inference_safetensors_only(self, exporter: ModelExporter, tmp_path: Path) -> None:
+        output_dir = tmp_path / "exported_safetensors"
+        exports = exporter.export_for_inference(output_dir, formats=["safetensors"])
+        assert "safetensors" in exports
+        assert exports["safetensors"].exists()
+        config_path = exports["safetensors"].parent / "config.json"
+        assert config_path.exists()
+
     def test_get_export_config(self, exporter: ModelExporter) -> None:
         config = exporter.get_export_config()
         assert "vocab_size" in config
