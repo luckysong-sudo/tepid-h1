@@ -285,6 +285,17 @@ class CLIIntegrationTests(unittest.TestCase):
         self.assertEqual(result, 0)
         Path(corpus_path).unlink(missing_ok=True)
 
+    def test_version_command(self):
+        import sys
+        from unittest.mock import patch
+
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        with self.assertRaises(SystemExit):
+            with patch.object(sys, "argv", ["tepid-h1", "--version"]):
+                parser.parse_args()
+
     def test_delta_validate_skip_gradients_produces_report(self):
         import json
         import sys
