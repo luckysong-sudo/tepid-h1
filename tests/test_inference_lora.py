@@ -297,6 +297,29 @@ class TestInferenceLoRAIntegration:
         output = lora_linear(x)
         assert output.shape == (2, 4)
 
+    def test_lora_weight_property_with_merge(self):
+        """Test LoRA weight property when merge_weights is True."""
+        model = nn.Linear(8, 4)
+        config = LoRAConfig(r=2, lora_alpha=4.0, merge_weights=True)
+        lora_linear = LoRALinear(model, config)
+
+        # When merge_weights is True, weight should include base + lora contribution
+        # But since lora_A and lora_B are zeros, weight should equal base
+        weight = lora_linear.weight
+        assert weight.shape == model.weight.shape
+        assert torch.equal(weight, model.weight)
+
+    def test_lora_extra_repr(self):
+        """Test LoRA linear extra_repr output."""
+        model = nn.Linear(8, 4)
+        config = LoRAConfig(r=2, lora_alpha=4.0)
+        lora_linear = LoRALinear(model, config)
+        repr_str = repr(lora_linear)
+        assert "in_features=8" in repr_str
+        assert "out_features=4" in repr_str
+        assert "r=2" in repr_str
+        assert "alpha=4.0" in repr_str
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
