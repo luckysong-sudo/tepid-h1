@@ -173,6 +173,44 @@ class CLIIntegrationTests(unittest.TestCase):
         ])
         self.assertTrue(args.skip_gradients)
 
+    def test_train_smoke_command_accepts_valid_steps(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["train-smoke", "--steps", "2"])
+        self.assertEqual(args.steps, 2)
+
+    def test_train_smoke_command_accepts_valid_seq_len(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["train-smoke", "--sequence-length", "16"])
+        self.assertEqual(args.sequence_length, 16)
+
+    def test_compare_smoke_command_accepts_corpus_arg(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        with tempfile.NamedTemporaryFile(suffix=".jsonl") as corpus:
+            args = parser.parse_args(["compare-smoke", "--corpus", corpus.name])
+            self.assertEqual(str(args.corpus), corpus.name)
+
+    def test_corpus_stats_command(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        with tempfile.NamedTemporaryFile(suffix=".jsonl") as corpus:
+            args = parser.parse_args(["corpus-stats", corpus.name])
+            self.assertEqual(args.command, "corpus-stats")
+
+    def test_corpus_compare_command(self):
+        from tepid_h1.cli import build_parser
+
+        parser = build_parser()
+        with tempfile.NamedTemporaryFile(suffix=".jsonl") as training, tempfile.NamedTemporaryFile(suffix=".jsonl") as validation:
+            args = parser.parse_args(["corpus-compare", training.name, validation.name])
+            self.assertEqual(args.command, "corpus-compare")
+
     def test_delta_validate_skip_gradients_produces_report(self):
         import json
         import sys
