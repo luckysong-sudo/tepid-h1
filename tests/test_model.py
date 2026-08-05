@@ -279,7 +279,7 @@ class ModelTests(unittest.TestCase):
 
     def test_attention_rejects_positions_beyond_configured_limit(self):
         from tepid_h1.config import TepidH1Config
-        from tepid_h1.modeling.layers import GQAAttentionReference
+        from tepid_h1.modeling.layers import GQAAttentionReference, GlobalSparseAttentionReference, AttentionState
 
         config = TepidH1Config.smoke()
         layer = GQAAttentionReference(config, local_window=4).eval()
@@ -287,6 +287,97 @@ class ModelTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "max_position_embeddings"):
             layer(x)
+
+        # Test global sparse attention reference fallback
+        sparse_layer = GlobalSparseAttentionReference(config)
+        x_short = torch.randn(1, 2, config.hidden_size)
+        state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, 2, config.head_dim),
+            value=torch.randn(1, config.num_kv_heads, 2, config.head_dim),
+            tokens_seen=2,
+        )
+        output, next_state = sparse_layer(x_short, state)
+        assert output.shape == x_short.shape
+
+    def test_attention_validates_state_shape(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GQAAttentionReference, AttentionState
+
+        config = TepidH1Config.smoke()
+        layer = GQAAttentionReference(config, local_window=4).eval()
+        x = torch.randn(1, 2, config.hidden_size)
+        state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, 2, 16),  # wrong head_dim
+            value=torch.randn(1, config.num_kv_heads, 2, 16),
+            tokens_seen=2,
+        )
+
+        with self.assertRaisesRegex(ValueError, "head_dim"):
+            layer(x, state)
+
+    def test_attention_validates_kv_shapes(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GQAAttentionReference, AttentionState
+
+        config = TepidH1Config.smoke()
+        layer = GQAAttentionReference(config, local_window=4).eval()
+        x = torch.randn(1, 2, config.hidden_size)
+        state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, 2, config.head_dim),
+            value=torch.randn(1, config.num_kv_heads, 2, config.head_dim + 1),  # mismatch
+            tokens_seen=2,
+        )
+
+        with self.assertRaisesRegex(ValueError, "identical shapes"):
+            layer(x, state)
+
+    def test_attention_rejects_invalid_tokens_seen_type(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GQAAttentionReference, AttentionState
+
+        config = TepidH1Config.smoke()
+        layer = GQAAttentionReference(config, local_window=4).eval()
+        x = torch.randn(1, 2, config.hidden_size)
+        state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, 2, config.head_dim),
+            value=torch.randn(1, config.num_kv_heads, 2, config.head_dim),
+            tokens_seen=True,  # bool, not int
+        )
+
+        with self.assertRaisesRegex(TypeError, "tokens_seen"):
+            layer(x, state)
+
+    def test_attention_rejects_tokens_seen_smaller_than_cache(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GQAAttentionReference, AttentionState
+
+        config = TepidH1Config.smoke()
+        layer = GQAAttentionReference(config, local_window=4).eval()
+        x = torch.randn(1, 2, config.hidden_size)
+        state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, 5, config.head_dim),
+            value=torch.randn(1, config.num_kv_heads, 5, config.head_dim),
+            tokens_seen=3,  # smaller than cached tokens
+        )
+
+        with self.assertRaisesRegex(ValueError, "cannot be smaller"):
+            layer(x, state)
+
+    def test_attention_validates_device_and_dtype(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GQAAttentionReference, AttentionState
+
+        config = TepidH1Config.smoke()
+        layer = GQAAttentionReference(config, local_window=4).eval()
+        x = torch.randn(1, 2, config.hidden_size)
+        state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, 2, config.head_dim, dtype=torch.float64),
+            value=torch.randn(1, config.num_kv_heads, 2, config.head_dim, dtype=torch.float64),
+            tokens_seen=2,
+        )
+
+        with self.assertRaisesRegex(ValueError, "same device and dtype"):
+            layer(x, state)
 
 
 if __name__ == "__main__":
