@@ -68,6 +68,32 @@ class RetrievalEvaluationTests(unittest.TestCase):
             report["by_position"]["middle"], {"cases": 0, "correct": 0, "accuracy": None}
         )
 
+    def test_generate_retrieval_suite_requires_valid_lengths(self):
+        with self.assertRaisesRegex(ValueError, "at least 32"):
+            generate_retrieval_suite(lengths=(16,), seed=1)
+        with self.assertRaisesRegex(ValueError, "unique"):
+            generate_retrieval_suite(lengths=(64, 64), seed=1)
+
+    def test_generate_retrieval_suite_requires_valid_positions(self):
+        with self.assertRaisesRegex(ValueError, "in \\(0, 1\\)"):
+            generate_retrieval_suite(lengths=(64,), positions=(0.0,), seed=1)
+        with self.assertRaisesRegex(ValueError, "unique"):
+            generate_retrieval_suite(lengths=(64,), positions=(0.5, 0.5), seed=1)
+
+    def test_write_and_load_retrieval_suite(self):
+        cases = generate_retrieval_suite(lengths=(64,), positions=(0.5,), seed=42)
+        with tempfile.TemporaryDirectory() as directory:
+            prompts = Path(directory) / "prompts.jsonl"
+            answers = Path(directory) / "answers.jsonl"
+            write_retrieval_suite(cases, prompts_path=prompts, answers_path=answers)
+
+            loaded_prompts = load_answer_key(prompts)
+            loaded_answers = load_answer_key(answers)
+
+            self.assertEqual(len(loaded_prompts), 1)
+            self.assertEqual(len(loaded_answers), 1)
+            self.assertIn("answer", loaded_answers[cases[0].case_id])
+
 
 if __name__ == "__main__":
     unittest.main()
