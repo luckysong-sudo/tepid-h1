@@ -211,6 +211,44 @@ class CLIIntegrationTests(unittest.TestCase):
             args = parser.parse_args(["corpus-compare", training.name, validation.name])
             self.assertEqual(args.command, "corpus-compare")
 
+    def test_baseline_report_command(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        with patch.object(sys, "argv", ["tepid-h1", "baseline-report", "--variant", "smoke"]), patch(
+            "sys.stdout", new=StringIO()
+        ) as mock_stdout:
+            result = main()
+
+        self.assertEqual(result, 0)
+        output = mock_stdout.getvalue()
+        self.assertIn("baseline", output)
+
+    def test_retrieval_generate_command(self):
+        import sys
+        from io import StringIO
+        from unittest.mock import patch
+
+        from tepid_h1.cli import main
+
+        with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as prompts, tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as answers:
+            with patch.object(sys, "argv", [
+                "tepid-h1", "retrieval-generate",
+                "--prompts", prompts.name,
+                "--answers", answers.name,
+                "--length", "64",
+                "--position", "0.5",
+                "--seed", "42",
+            ]):
+                result = main()
+
+            self.assertEqual(result, 0)
+            Path(prompts.name).unlink(missing_ok=True)
+            Path(answers.name).unlink(missing_ok=True)
+
     def test_delta_validate_skip_gradients_produces_report(self):
         import json
         import sys
