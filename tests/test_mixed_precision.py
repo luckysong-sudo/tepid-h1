@@ -112,3 +112,101 @@ class TestMixedPrecisionManager:
         manager.load_state_dict({"config": {"enabled": False, "mode": "fp32", "grad_scaler": True}})
         assert manager.config.enabled is False
         assert manager.config.mode.value == "fp32"
+
+    def test_autocast_context_enabled_cpu(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig(enabled=True, mode="fp16")
+        manager = MixedPrecisionManager(config)
+
+        with manager.autocast_context():
+            x = torch.randn(2, 3)
+            # Should run without error on CPU
+
+    def test_autocast_context_enabled_fp32(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig(enabled=True, mode="fp32")
+        manager = MixedPrecisionManager(config)
+
+        with manager.autocast_context():
+            x = torch.randn(2, 3)
+            assert x.dtype == torch.float32
+
+    def test_scale_loss_returns_unscaled_when_no_scaler(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig(enabled=False)
+        manager = MixedPrecisionManager(config)
+
+        loss = torch.tensor(2.0)
+        result = manager.scale_loss(loss)
+        assert result.item() == 2.0
+
+    def test_unscale_grads_noop_when_no_scaler(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig(enabled=False)
+        manager = MixedPrecisionManager(config)
+
+        model = torch.nn.Linear(10, 10)
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+
+        # Should not raise
+        manager.unscale_grads(optimizer)
+
+    def test_step_calls_optimizer_step_when_no_scaler(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig(enabled=False)
+        manager = MixedPrecisionManager(config)
+
+        model = torch.nn.Linear(10, 10)
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+        initial_weight = model.weight.data.clone()
+
+        manager.step(optimizer)
+
+        # Weights should remain unchanged since no forward/backward was done
+        assert torch.equal(model.weight.data, initial_weight)
+
+    def test_to_device_fp16_conversion(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager, PrecisionMode
+
+        config = MixedPrecisionConfig(enabled=True, mode=PrecisionMode.FP16)
+        manager = MixedPrecisionManager(config)
+
+        tensor = torch.randn(3, 4, dtype=torch.float32)
+        result = manager.to_device(tensor, torch.device("cpu"))
+        assert result.dtype == torch.float16
+
+    def test_to_device_no_conversion_for_bf16(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager, PrecisionMode
+
+        config = MixedPrecisionConfig(enabled=True, mode=PrecisionMode.BF16)
+        manager = MixedPrecisionManager(config)
+
+        tensor = torch.randn(3, 4, dtype=torch.float32)
+        result = manager.to_device(tensor, torch.device("cpu"))
+        # BF16 mode should not convert to half
+        assert result.dtype == torch.float32
+
+    def test_to_device_no_conversion_when_disabled(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig(enabled=False)
+        manager = MixedPrecisionManager(config)
+
+        tensor = torch.randn(3, 4, dtype=torch.float16)
+        result = manager.to_device(tensor, torch.device("cpu"))
+        assert result.dtype == torch.float16
+
+    def test_state_dict_without_scaler(self):
+        from tepid_h1.mixed_precision import MixedPrecisionConfig, MixedPrecisionManager
+
+        config = MixedPrecisionConfig(enabled=False)
+        manager = MixedPrecisionManager(config)
+        state = manager.state_dict()
+
+        assert "scaler_state" not in state
+        assert state["config"]["enabled"] is False
