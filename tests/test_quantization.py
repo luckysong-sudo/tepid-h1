@@ -200,3 +200,38 @@ class TestSaveQuantizedModel:
         cfg = QuantizationConfig(mode=QuantizationMode.BF16)
         sizes = estimate_quantized_size(model, cfg)
         assert sizes["weight_bytes"] > 0
+
+    def test_fp8_quantization(self) -> None:
+        linear = nn.Linear(8, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.FP8, group_size=128)
+        ql = QuantizedLayer.from_linear(linear, cfg)
+        assert ql.weight.dtype == torch.float8_e4m3fn
+        assert ql.quantization_mode == QuantizationMode.FP8
+
+    def test_fp16_quantization(self) -> None:
+        linear = nn.Linear(8, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.FP16)
+        ql = QuantizedLayer.from_linear(linear, cfg)
+        assert ql.weight.dtype == torch.float16
+        assert ql.quantization_mode == QuantizationMode.FP16
+
+    def test_bf16_quantization(self) -> None:
+        linear = nn.Linear(8, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.BF16)
+        ql = QuantizedLayer.from_linear(linear, cfg)
+        assert ql.weight.dtype == torch.bfloat16
+        assert ql.quantization_mode == QuantizationMode.BF16
+
+    def test_estimate_int8_asymmetric_size(self) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=False)
+        sizes = estimate_quantized_size(model, cfg)
+        assert sizes["zero_bytes"] > 0
+
+    def test_quantize_model_with_digit_layer_name(self) -> None:
+        model = nn.Sequential(nn.Linear(8, 4), nn.ReLU(), nn.Linear(4, 2))
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        result = quantize_model(model, cfg, skip_layers={"1"})
+        assert "1" not in result
+        assert "0" in result
+        assert "2" in result

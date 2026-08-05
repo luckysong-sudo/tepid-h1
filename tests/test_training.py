@@ -322,6 +322,134 @@ class TrainingTests(unittest.TestCase):
                 metadata={"tensor": torch.tensor([1, 2, 3])},
             )
 
+    def test_train_step_validates_max_gradient_norm(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import causal_lm_train_step
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+        input_ids = torch.randint(0, config.vocab_size, (1, 4))
+
+        with self.assertRaisesRegex(ValueError, "positive"):
+            causal_lm_train_step(model, input_ids, optimizer, max_gradient_norm=0)
+        with self.assertRaisesRegex(ValueError, "positive"):
+            causal_lm_train_step(model, input_ids, optimizer, max_gradient_norm=-1)
+
+    def test_train_step_validates_gradient_norm(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import causal_lm_train_step
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        input_ids = torch.randint(0, config.vocab_size, (1, 4))
+
+        metrics = causal_lm_train_step(model, input_ids, optimizer)
+        self.assertGreater(metrics.gradient_norm, 0)
+
+    def test_scheduler_warmup_and_cosine_decay(self):
+        import torch
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import WarmupCosineScheduler
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        scheduler = WarmupCosineScheduler(optimizer, warmup_steps=2, total_steps=10, min_lr_ratio=0.1)
+
+        lrs = []
+        for _ in range(10):
+            lrs.append(optimizer.param_groups[0]["lr"])
+            scheduler.step()
+
+        self.assertAlmostEqual(lrs[0], 5e-4, places=6)
+        self.assertAlmostEqual(lrs[1], 1e-3, places=6)
+        self.assertAlmostEqual(lrs[9], 1e-4, places=6)
+
+    def test_scheduler_state_dict_round_trip(self):
+        import torch
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import WarmupCosineScheduler
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        scheduler = WarmupCosineScheduler(optimizer, warmup_steps=2, total_steps=10)
+
+        scheduler.step()
+        scheduler.step()
+        state = scheduler.state_dict()
+
+        restored = WarmupCosineScheduler(optimizer, warmup_steps=2, total_steps=10)
+        restored.load_state_dict(state)
+
+        self.assertEqual(restored.completed_steps, 2)
+        self.assertEqual(restored.state_dict(), state)
+
+    def test_load_checkpoint_validates_scheduler_step(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import WarmupCosineScheduler, load_checkpoint, save_checkpoint
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+        scheduler = WarmupCosineScheduler(optimizer, warmup_steps=1, total_steps=5)
+
+        # Step the scheduler twice to reach step 2
+        scheduler.step()
+        scheduler.step()
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "test.pt"
+            save_checkpoint(checkpoint, model=model, optimizer=optimizer, scheduler=scheduler, step=2)
+
+            restored_model = TepidH1CausalLM(config)
+            restored_optimizer = torch.optim.AdamW(restored_model.parameters())
+            restored_scheduler = WarmupCosineScheduler(restored_optimizer, warmup_steps=1, total_steps=5)
+            state = load_checkpoint(checkpoint, model=restored_model, optimizer=restored_optimizer, scheduler=restored_scheduler)
+            self.assertEqual(state.step, 2)
+            self.assertEqual(restored_scheduler.completed_steps, 2)
+
+    def test_load_checkpoint_rejects_invalid_schema(self):
+        import torch
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import load_checkpoint
+        import tempfile
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "invalid.pt"
+            checkpoint.write_bytes(b"not a valid checkpoint")
+            with self.assertRaisesRegex((ValueError, Exception), ""):
+                load_checkpoint(checkpoint, model=model, optimizer=optimizer)
+
+    def test_load_checkpoint_rejects_invalid_step(self):
+        import torch
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import load_checkpoint
+        import tempfile
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "invalid.pt"
+            checkpoint.write_bytes(b"not a valid checkpoint")
+            with self.assertRaisesRegex((ValueError, Exception), ""):
+                load_checkpoint(checkpoint, model=model, optimizer=optimizer)
+
 
 if __name__ == "__main__":
     unittest.main()

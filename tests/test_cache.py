@@ -172,6 +172,34 @@ class AttentionCacheTests(unittest.TestCase):
         self.assertEqual(cache.dtype, torch.float16)
         self.assertEqual(cache.device.type, "cpu")
 
+    def test_to_converts_device_and_dtype(self):
+        k = torch.randn(1, 4, 8, 16, dtype=torch.float32)
+        v = torch.randn(1, 4, 8, 16, dtype=torch.float32)
+        cache = self.Cache()
+        cache.update(k, v)
+        self.assertEqual(cache.dtype, torch.float32)
+
+        converted = cache.to(dtype=torch.float16)
+        self.assertEqual(converted.dtype, torch.float16)
+        self.assertEqual(converted.seq_len, 4)
+        self.assertIsNotNone(converted.k_cache)
+        self.assertIsNotNone(converted.v_cache)
+
+    def test_to_returns_same_when_no_change(self):
+        k = torch.randn(1, 4, 8, 16)
+        v = torch.randn(1, 4, 8, 16)
+        cache = self.Cache()
+        cache.update(k, v)
+        same = cache.to(device=cache.device, dtype=cache.dtype)
+        self.assertIs(same, cache)
+
+    def test_post_init_derives_device_and_dtype(self):
+        k = torch.randn(1, 4, 8, 16, dtype=torch.float16)
+        v = torch.randn(1, 4, 8, 16, dtype=torch.float16)
+        cache = self.Cache(k_cache=k, v_cache=v)
+        self.assertEqual(cache.dtype, torch.float16)
+        self.assertEqual(cache.seq_len, 8)
+
 
 if __name__ == "__main__":
     unittest.main()
