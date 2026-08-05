@@ -7,6 +7,7 @@ from tepid_h1.config import TepidH1Config
 from tepid_h1.inference import GenerateConfig, InferenceEngine, decode_text
 from tepid_h1.lora import (
     LoRAConfig,
+    LoRALinear,
     apply_lora,
     freeze_base_model,
     get_lora_params,
@@ -261,6 +262,40 @@ class TestInferenceLoRAIntegration:
             config=GenerateConfig(max_new_tokens=3, do_sample=False),
         )
         assert generated.shape[1] == 3 + 3
+
+    def test_lora_weight_property(self, simple_model):
+        """Test LoRA weight property with merge_weights disabled."""
+        config = LoRAConfig(r=4, lora_alpha=8.0, merge_weights=False)
+        adapter = apply_lora(simple_model, config)
+
+        for child in simple_model.modules():
+            if hasattr(child, 'lora_A'):
+                # Set non-zero values
+                child.lora_A.data.fill_(0.5)
+                child.lora_B.data.fill_(0.5)
+                # Weight should include LoRA contribution
+                weight = child.weight
+                assert weight.shape == child.base_layer.weight.shape
+
+    def test_lora_fan_in_fan_out(self):
+        """Test LoRA with fan_in_fan_out=True."""
+        model = nn.Linear(8, 4)
+        config = LoRAConfig(r=2, lora_alpha=4.0, fan_in_fan_out=True)
+        lora_linear = LoRALinear(model, config)
+
+        # When fan_in_fan_out is True, lora_B should be transposed
+        assert lora_linear.lora_B.shape == (2, 4)
+
+    def test_lora_dropout_enabled(self):
+        """Test LoRA forward with dropout enabled."""
+        model = nn.Linear(8, 4)
+        config = LoRAConfig(r=2, lora_alpha=4.0, lora_dropout=0.1)
+        lora_linear = LoRALinear(model, config)
+        lora_linear.train()
+
+        x = torch.randn(2, 8)
+        output = lora_linear(x)
+        assert output.shape == (2, 4)
 
 
 if __name__ == "__main__":
