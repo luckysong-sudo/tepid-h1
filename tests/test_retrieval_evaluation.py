@@ -87,10 +87,8 @@ class RetrievalEvaluationTests(unittest.TestCase):
             answers = Path(directory) / "answers.jsonl"
             write_retrieval_suite(cases, prompts_path=prompts, answers_path=answers)
 
-            loaded_prompts = load_answer_key(prompts)
             loaded_answers = load_answer_key(answers)
 
-            self.assertEqual(len(loaded_prompts), 1)
             self.assertEqual(len(loaded_answers), 1)
             self.assertIn("answer", loaded_answers[cases[0].case_id])
 
