@@ -505,6 +505,57 @@ class TrainingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "between zero and one"):
             WarmupCosineScheduler(optimizer, warmup_steps=2, total_steps=10, min_lr_ratio=-0.1)
 
+    def test_load_checkpoint_rejects_invalid_optimizer_state(self):
+        import torch
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import load_checkpoint, save_checkpoint
+        import tempfile
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "test.pt"
+            save_checkpoint(checkpoint, model=model, optimizer=optimizer, step=0)
+
+            # Load with corrupted optimizer state
+            import json
+            payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+            payload["optimizer_state"] = "invalid"
+            torch.save(payload, checkpoint)
+
+            restored_model = TepidH1CausalLM(config)
+            restored_optimizer = torch.optim.AdamW(restored_model.parameters())
+            with self.assertRaisesRegex(TypeError, "optimizer_state"):
+                load_checkpoint(checkpoint, model=restored_model, optimizer=restored_optimizer)
+
+    def test_load_checkpoint_rejects_invalid_rng_state(self):
+        import torch
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling import TepidH1CausalLM
+        from tepid_h1.training import load_checkpoint, save_checkpoint
+        import tempfile
+
+        config = TepidH1Config.smoke()
+        model = TepidH1CausalLM(config)
+        optimizer = torch.optim.AdamW(model.parameters())
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "test.pt"
+            save_checkpoint(checkpoint, model=model, optimizer=optimizer, step=0)
+
+            # Load with corrupted rng state
+            payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+            payload["rng_state"] = "invalid"
+            torch.save(payload, checkpoint)
+
+            restored_model = TepidH1CausalLM(config)
+            restored_optimizer = torch.optim.AdamW(restored_model.parameters())
+            with self.assertRaisesRegex(TypeError, "rng_state"):
+                load_checkpoint(checkpoint, model=restored_model, optimizer=restored_optimizer)
+
 
 if __name__ == "__main__":
     unittest.main()
