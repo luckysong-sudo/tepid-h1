@@ -281,3 +281,79 @@ class TestSaveQuantizedModel:
         scales = torch.tensor([[0.01, 0.02, 0.03]])
         result = _dequantize_tensor(quantized.float(), scales, None, torch.float32, 128)
         assert result.shape == quantized.shape
+
+    def test_estimate_quantized_size_with_bias(self) -> None:
+        model = nn.Linear(8, 4, bias=True)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        sizes = estimate_quantized_size(model, cfg)
+        assert "bias_bytes" in sizes
+        assert sizes["bias_bytes"] == 4
+
+    def test_estimate_quantized_size_no_bias(self) -> None:
+        model = nn.Linear(8, 4, bias=False)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        sizes = estimate_quantized_size(model, cfg)
+        assert "bias_bytes" not in sizes
+
+    def test_estimate_quantized_size_int4(self) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT4, symmetric=True)
+        sizes = estimate_quantized_size(model, cfg)
+        # INT4 should halve the weight bytes (8*4=32 elements -> 16 bytes)
+        assert sizes["weight_bytes"] == 16
+
+    def test_estimate_quantized_size_nf4(self) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.NF4, group_size=0)
+        sizes = estimate_quantized_size(model, cfg)
+        assert sizes["weight_bytes"] > 0
+
+    def test_apply_quantized_model_with_nested_name(self) -> None:
+        model = nn.Sequential(nn.Linear(8, 4), nn.ReLU(), nn.Linear(4, 2))
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        qlayers = quantize_model(model, cfg)
+        apply_quantized_model(model, qlayers)
+        # Should have replaced both linear layers
+        assert model[0].weight.shape == (4, 8)
+        assert model[2].weight.shape == (2, 4)
+
+    def test_save_quantized_model_without_config(self, tmp_path: Path) -> None:
+        model = nn.Linear(8, 4)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        qlayers = quantize_model(model, cfg)
+        path = tmp_path / "model_no_config.pt"
+        artifacts = save_quantized_model(model, qlayers, path, config=None)
+        assert path.exists()
+        assert artifacts["quantization_mode"] == "none"
+        assert "config" not in artifacts
+
+    def test_apply_quantized_model_with_nested_path(self) -> None:
+        """Test apply_quantized_model with nested module paths."""
+        from tepid_h1.quantization import QuantizedLayer
+
+        inner = nn.Linear(8, 4)
+        outer = nn.Sequential(inner)
+        cfg = QuantizationConfig(mode=QuantizationMode.INT8, symmetric=True)
+        qlayers = quantize_model(outer, cfg)
+        apply_quantized_model(outer, qlayers)
+        assert "0" in qlayers
+
+    def test_dequantize_tensor_with_zeros(self) -> None:
+        from tepid_h1.quantization import _dequantize_tensor
+        import torch
+
+        quantized = torch.tensor([[1.0, 2.0, 3.0]])
+        scales = torch.tensor([[0.01, 0.02, 0.03]])
+        zeros = torch.tensor([[0.5, 0.5, 0.5]])
+        result = _dequantize_tensor(quantized, scales, zeros, torch.float32, 128)
+        assert result.shape == quantized.shape
+
+    def test_dequantize_tensor_empty_last_dim(self) -> None:
+        from tepid_h1.quantization import _dequantize_tensor
+        import torch
+
+        quantized = torch.empty(2, 0, dtype=torch.uint8)
+        scales = torch.ones(2, 1)
+        result = _dequantize_tensor(quantized, scales, None, torch.float32, 128)
+        assert result.shape == (2, 0)
+        assert result.dtype == torch.float32
