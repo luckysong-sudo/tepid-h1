@@ -427,6 +427,19 @@ class ModelTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "limited to"):
             layer(x, state)
 
+    def test_model_moe_report_with_no_router_stats(self):
+        """Test moe_balance_report when no layer has router stats."""
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.model import TepidH1Model
+
+        config = TepidH1Config.smoke()
+        model = TepidH1Model(config)
+        # Don't run forward, so no router stats are collected
+        report = model.moe_balance_report()
+        assert report["moe_layers"] > 0
+        assert report["observed_layers"] == 0
+        assert report["passed"] is False
+
     def test_delta_layer_rejects_attention_state(self):
         from tepid_h1.config import TepidH1Config, SequenceMixer, ChannelMixer
         from tepid_h1.modeling.model import TepidH1Block
