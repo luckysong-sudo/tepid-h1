@@ -379,6 +379,54 @@ class ModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "same device and dtype"):
             layer(x, state)
 
+    def test_attention_validates_key_ndim(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GQAAttentionReference, AttentionState
+
+        config = TepidH1Config.smoke()
+        layer = GQAAttentionReference(config, local_window=4).eval()
+        x = torch.randn(1, 2, config.hidden_size)
+        state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, 2),  # 3D instead of 4D
+            value=torch.randn(1, config.num_kv_heads, 2, config.head_dim),
+            tokens_seen=2,
+        )
+
+        with self.assertRaisesRegex(ValueError, "must have shape"):
+            layer(x, state)
+
+    def test_attention_validates_tokens_seen_type(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GQAAttentionReference, AttentionState
+
+        config = TepidH1Config.smoke()
+        layer = GQAAttentionReference(config, local_window=4).eval()
+        x = torch.randn(1, 2, config.hidden_size)
+        state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, 2, config.head_dim),
+            value=torch.randn(1, config.num_kv_heads, 2, config.head_dim),
+            tokens_seen="invalid",  # string instead of int
+        )
+
+        with self.assertRaisesRegex(TypeError, "tokens_seen"):
+            layer(x, state)
+
+    def test_global_sparse_attention_rejects_excessive_tokens(self):
+        from tepid_h1.config import TepidH1Config
+        from tepid_h1.modeling.layers import GlobalSparseAttentionReference, AttentionState
+
+        config = TepidH1Config.smoke()
+        layer = GlobalSparseAttentionReference(config)
+        x = torch.randn(1, 10, config.hidden_size)
+        state = AttentionState(
+            key=torch.randn(1, config.num_kv_heads, config.global_reference_max_tokens - 5, config.head_dim),
+            value=torch.randn(1, config.num_kv_heads, config.global_reference_max_tokens - 5, config.head_dim),
+            tokens_seen=config.global_reference_max_tokens - 5,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "limited to"):
+            layer(x, state)
+
     def test_delta_layer_rejects_attention_state(self):
         from tepid_h1.config import TepidH1Config, SequenceMixer, ChannelMixer
         from tepid_h1.modeling.model import TepidH1Block
